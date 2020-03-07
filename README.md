@@ -24,7 +24,7 @@ Computational geometry.
 https://www.cgal.org/projects.html#astronomy
 
 One featured example that uses that package: taking redshift data and creating structure. Could perform similar operation to expression data? To create compartments of tissue based on different cell types in each subtissue component...
-#![example "adhesive" algorithm](example.computational.geometry.png)
+#![example "adhesive" algorithm](images/example.computational.geometry.png)
 
 
 
