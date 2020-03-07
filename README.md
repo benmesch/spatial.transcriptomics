@@ -1,13 +1,11 @@
 ---
-title: "R Notebook"
+title: "Projects in Spatial Transcriptomics"
 output: 
   html_document:
     keep_md: true
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
 
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
 
 
 ```r
@@ -21,7 +19,7 @@ plot(cars)
 
 
 
-#Future
+# Future
 Computational geometry. 
 https://www.cgal.org/projects.html#astronomy
 
