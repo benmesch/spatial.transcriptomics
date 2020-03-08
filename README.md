@@ -1,9 +1,6 @@
----
-title: "Projects in Spatial Transcriptomics"
-output: 
-  html_document:
-    keep_md: true
----
+# Projects in Spatial Transcriptomics
+
+![tissue slide, with clusters from tSNE-reduced gene counts](README_files/screenshots/bc1.gif)
 
 Load count data for breast cancer layer 1. For each of 254 locations on the tissue, load counts of 14,881 genes expressed at that location.  Source data from "Visualization and analysis of gene expression in tissue sections by spatial transcriptomics" (Stahl, Patrik, et al 2016). 
 
@@ -129,9 +126,6 @@ The clusters can be used in the plot of x-y location coordinates from the tissue
 test <- image_scale(c(full_img,overlay), "1000")
 image_write(image_animate(image_morph(test, 10)), "README_files/screenshots/bc1.gif")
 ```
-
-#![tissue slide](README_files/screenshots/bc1.gif)
-
 
 # Resources
 * Source: Ståhl, Patrik L., et al. "Visualization and analysis of gene expression in tissue sections by spatial transcriptomics." Science 353.6294 (2016): 78-82.
