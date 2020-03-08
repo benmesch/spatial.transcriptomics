@@ -65,17 +65,18 @@ Downscale and preview image:
 plot(image_scale(full_img, "1000"))
 ```
 
-
+Annotate tissue image with clusters from tSNE-reduced gene counts:
 ```{r}
 overlay <- image_scale(full_img, "1000")
 overlay_small <- image_scale(full_img, "1000")
 cols <- c("red","green","blue","yellow","lime","magenta","wheat4")
+dot.size <- 75
 for (i in seq(1,length(x))) {
-  xi <- x[i] * 288.9 * (1000/9245) #upscale to 9k x 9k, then downscale to 1k x 1k
-  yi <- y[i] * 292.6 * (1076/9949)
-  locationi <- paste("+",as.character(xi),"+",as.character(yi),sep="")
+  xi <- x[i] * 288.9 * (image_info(overlay)$width/9245) #upscale to 9k x 9k, then downscale to 1k x 1k
+  yi <- y[i] * 292.6 * (image_info(overlay)$height/9949)
+  locationi <- paste("+",as.character(xi-dot.size/2),"+",as.character(image_info(overlay)$height-yi),sep="")
   overlay <- image_annotate(overlay, "•", size = 150, gravity = "southwest", color = cols[clusters[i]], location=locationi)
-  overlay_small <- image_annotate(overlay_small, "•", size = 75, gravity = "southwest", color = cols[clusters[i]], location=locationi)
+  overlay_small <- image_annotate(overlay_small, "•", size = dot.size, gravity = "southwest", color = cols[clusters[i]], location=locationi)
 }
 plot(overlay_small)
 ```
