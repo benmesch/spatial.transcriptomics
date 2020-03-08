@@ -1,6 +1,6 @@
 # Projects in Spatial Transcriptomics
 
-![tissue slide, with clusters from tSNE-reduced gene counts](README_files/screenshots/bc1.gif)
+![tissue slide, with overlay](README_files/screenshots/bc1.gif)
 
 Load count data for breast cancer layer 1. For each of 254 locations on the tissue, load counts of 14,881 genes expressed at that location.  Source data from "Visualization and analysis of gene expression in tissue sections by spatial transcriptomics" (Stahl, Patrik, et al 2016). 
 
@@ -29,18 +29,14 @@ head(st[1:5,1:6])
 ## 5 15.011x7.984     4      0        1      0     0
 ```
 
-The first column lists the coordinates of the locations. 
+The first column lists the coordinates of the locations:
 
 ```r
 coordinates <- st$X
 x <- as.numeric(substr(coordinates,1,as.integer(regexpr("x",coordinates))-1))
 y <- as.numeric(substr(coordinates,as.integer(regexpr("x",coordinates))+1,nchar(as.character(coordinates))))
 
-#head(coordinates)
-#head(x)
-#head(y)
-#plot(x,y)
-plot(x * 288.9, y * 292.6,ylim=c(0,9000),xlim=c(0,9000)) #upscale coordinates (or can resize image down to 33x35)
+plot(x * 288.9, 9000 - y * 292.6,ylim=c(1000,8000),xlim=c(1500,7500)) #upscale coordinates (or can resize image down to 33x35)
 ```
 
 ![](README_files/figure-html/unnamed-chunk-3-1.png)<!-- -->
@@ -52,21 +48,15 @@ plot(x * 288.9, y * 292.6,ylim=c(0,9000),xlim=c(0,9000)) #upscale coordinates (o
 library(Rtsne)
 set.seed(1989)
 #st_mat <- as.matrix(st[,-1])
-test2 <- Rtsne(st,dim=3)
-#sample_names <- st[,1]
-#test <- normalize_input(st_mat)
-#dim(test)
-#head(test[1:5,1:5])
-#dim(st)
-#head(st)
+reduced.dim <- Rtsne(st,dim=3)
 ```
 
-Cluster first 2 dimension results from T-SNE, using k-means(7)
+Plot first 2 dimension results from T-SNE, and color using k-means(7)
 
 ```r
 set.seed(1989)
-clusters <- kmeans(test2$Y,7)$cluster
-plot(test2$Y,col=clusters,asp=1)
+clusters <- kmeans(reduced.dim$Y,7)$cluster
+plot(reduced.dim$Y,col=clusters,asp=1)
 ```
 
 ![](README_files/figure-html/unnamed-chunk-5-1.png)<!-- -->
@@ -123,7 +113,7 @@ plot(overlay)
 The clusters can be used in the plot of x-y location coordinates from the tissue sample. (Save as a gif)
 
 ```r
-test <- image_scale(c(full_img,overlay), "1000")
+test <- image_scale(c(full_img,full_img,overlay,full_img), "1000")
 image_write(image_animate(image_morph(test, 10)), "README_files/screenshots/bc1.gif")
 ```
 
