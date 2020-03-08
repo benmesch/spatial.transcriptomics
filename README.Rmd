@@ -74,7 +74,7 @@ plot(overlay)
 
 The clusters can be used in the plot of x-y location coordinates from the tissue sample. (Save as a gif)
 ```{r}
-test <- image_scale(c(full_img,full_img,overlay,full_img), "1000")
+test <- image_scale(c(full_img,overlay,full_img,full_img), "1000")
 image_write(image_animate(image_morph(test, 10)), "README_files/screenshots/bc1.gif")
 ```
 
