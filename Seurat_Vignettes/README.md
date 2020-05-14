@@ -8,36 +8,36 @@ Dataflow and Availability
 -   FASTQ input, 29GB
 -   Genome-Aligned BAM & BAM index, 21GB
 -   Feature / Cell (spot) matrix "raw", 62MB \[22MB HDF5\]
--   Feature / Cell (spot) matrix "filtered", 52MB \[19MB HDF5\] ^10X
+-   Feature / Cell (spot) matrix "filtered", 52MB \[19MB HDF5\] ^ 10X
     also provides a clustering analysis (27MB) and per-molecule read
     information (309MB), and additional images (9.66MB)
 
 #### Seurat Vignette for [Spatial Analysis](https://satijalab.org/seurat/v3.1/pbmc3k_tutorial.html)
 
 -   Can load 10X data from spaceranger pipeline
--   Or can use SeuratData package to download filtered feature/cell
-    matrix from within the R notebook
+    -   Or can use SeuratData package to download filtered feature/cell
+        matrix from within the R notebook
 -   Normalize and scale using scTransform
--   Use NormalizeData() on scRNA-seq (log normalizes), but use
-    scTransform on spatial data (different samples have different cell
-    densities & read volumes!)
--   scTransform normalizes, detecs high-variance features (the top ~2000
-    genes that will be used in downstream steps), and saves as a new
-    Assay in the Seurat object
+    -   Use NormalizeData() on scRNA-seq (log normalizes), but use
+        scTransform on spatial data (different samples have different
+        cell densities & read volumes!)
+    -   scTransform normalizes, detecs high-variance features (the top
+        ~2000 genes that will be used in downstream steps), and saves as
+        a new Assay in the Seurat object
 -   Dim reduction and clustering
--   RunPCA, FindNeighbors, FindClusters, RunUMAP... results are saved in
-    the Sueurat object itself
+    -   RunPCA, FindNeighbors, FindClusters, RunUMAP... results are
+        saved in the Sueurat object itself
 -   Identify spatially variable genes
--   Can use the cluster borders from the previous step as labeling
-    different sample conditions for DE
--   Or can use markvariogram (Trendsceek) mark point process
--   Others not implemented in Seurat: SpatialDE, Splotch
+    -   Can use the cluster borders from the previous step as labeling
+        different sample conditions for DE
+    -   Or can use markvariogram (Trendsceek) mark point process
+    -   Others not implemented in Seurat: SpatialDE, Splotch
 -   Integration with Single-Cell Data
--   Deconvolute the spatial samples into component cell types
--   Or can use anchor-based integration methods ("label trransfer") for
-    matching to reference single cells' annotations
-    -   Can then use markvariogram again to identify **cell types** that
-        are spatially variable
+    -   Deconvolute the spatial samples into component cell types
+    -   Or can use anchor-based integration methods ("label trransfer")
+        for matching to reference single cells' annotations
+        -   Can then use markvariogram again to identify **cell types**
+            that are spatially variable
 
 Read in the brain data from the Seurat (v3.2) [vignette on Spatial
 analysis](https://satijalab.org/seurat/v3.1/pbmc3k_tutorial.html):
