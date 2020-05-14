@@ -1,0 +1,17 @@
+#start with R 3.4 (4.0 did not work with Seurat 3.2 development version and latest Rstudio kept crashing)
+#3.4 couldn't get spatial to work... but 3.6.1 did!!
+
+#install devtools, for windows
+install.packages("devtools", type = "win.binary")
+
+#install h5 (first will have you install r tools, 103MB)
+devtools::install_github(repo = "hhoeflin/hdf5r")
+
+#next, can try seurat spatial (3.2 preview build)...
+install lots of packages... glue, rlang, shiny, igraph
+devtools::install_github(repo = "mojaveazure/loomR", ref = "develop")
+
+#install latest version of seurat
+install.packages('Seurat')
+
+devtools::install_github("satijalab/seurat", ref = "spatial")
