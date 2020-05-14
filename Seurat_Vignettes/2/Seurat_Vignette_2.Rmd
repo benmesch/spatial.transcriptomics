@@ -1,0 +1,190 @@
+---
+title: "Seurat Vignette #2"
+output: md_document
+---  
+Ben Mescher
+From this [source](https://satijalab.org/seurat/v3.1/pbmc3k_tutorial.html).
+
+Needed R 3.6.1 to get the dev "3.2" version of spatial Seurat to work! 2 hrs...
+`devtools::install_github("satijalab/seurat", ref = "spatial")`
+
+```{r}
+library(Seurat)
+library(SeuratData)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+```
+
+You can download the data here, and load it into Seurat using the Load10X_Spatial function (there is a slideseq vignette too). This reads in the output of the spaceranger pipeline, and returns a Seurat object that contains both the spot-level expression data along with the associated image of the tissue slice. You can also use our SeuratData package for easy data access, as demonstrated below. After installing the dataset, you can type ?stxBrain to learn more.
+```{r}
+InstallData("stxBrain")
+brain <- LoadData("stxBrain", type = "anterior1")
+```
+
+Wow, this brain dataset is 366Mb. 2,696 cells with mean 24,269 count.
+```{r}
+length(brain$nCount_Spatial)
+summary(brain$nCount_Spatial)
+```
+
+## Preprocessing
+Similar preprocessing needed for scRNA-Seq. Variance in different spots can be substantial (different cell densities). Need to do normalization carefully to not erase those very real differences (while still able to scale out technical effects).
+```{r}
+plot1 <- VlnPlot(brain, features = "nCount_Spatial", pt.size = 0.1) + NoLegend()
+plot2 <- SpatialFeaturePlot(brain, features = "nCount_Spatial") + theme(legend.position = "right")
+wrap_plots(plot1, plot2)
+```
+
+The plot above, right, shows that read density is higher in some areas of the slide. So can't just normalize every spot using the same scale. `sctransform` is a better way to normalize, builds "regularized negative binomial modesl of gene expression in order to account for technical artifacts while preserving biological variance. For more details on sctransform, please see the pre-print here and the Seurat vignette here"
+
+`sctransform` normalizes the data, detects high-variance features, and stores the data in the SCT assay.
+```{r}
+brain <- SCTransform(brain, assay = "Spatial", verbose = FALSE)
+```
+
+```{r}
+length(brain$nCount_Spatial)
+summary(brain$nCount_Spatial)
+```
+
+## Gene Expression Visualization
+```{r}
+SpatialFeaturePlot(brain, features = c("Hpca", "Ttr"))
+```
+
+```{r}
+p1 <- SpatialFeaturePlot(brain, features = "Ttr", pt.size.factor = 1)
+p2 <- SpatialFeaturePlot(brain, features = "Ttr", alpha = c(0.1, 1))
+p1 + p2
+```
+
+## Dimensionality Reduction, Clustering, and Visualization
+Same workflow used for scRNA-seq analysis:
+```{r}
+brain <- RunPCA(brain, assay = "SCT", verbose = FALSE)
+brain <- FindNeighbors(brain, reduction = "pca", dims = 1:30)
+brain <- FindClusters(brain, verbose = FALSE)
+brain <- RunUMAP(brain, reduction = "pca", dims = 1:30)
+```
+
+UMAP:
+```{r}
+p1 <- DimPlot(brain, reduction = "umap", label = TRUE)
+p2 <- SpatialDimPlot(brain, label = TRUE, label.size = 3)
+p1 + p2
+```
+
+Plot subset of the groups:
+```{r}
+SpatialDimPlot(brain, cells.highlight = CellsByIdentities(object = brain, idents = c(1, 2, 5, 3, 
+    4, 8)), facet.highlight = TRUE, ncol = 3)
+```
+
+## Identification of Spatially Variable Features
+Traditional differential expression using pre-annotated anatomical regions (using the UMAP clusters, I think)
+```{r}
+de_markers <- FindMarkers(brain, ident.1 = 4, ident.2 = 6)
+SpatialFeaturePlot(object = brain, features = rownames(de_markers)[1:3], alpha = c(0.1, 1), ncol = 3)
+```
+
+### Alternate Spatially Variable Feature Analysis
+Do not use UMAP cluster labels ("pre-annotation"). Use markvariogram (as in Trendsceek) to model a mark point process and compute a variogram.
+
+This actually ballooned the variable size of `brain` from 366Mb up to 830Mb!
+```{r}
+brain <- FindSpatiallyVariableFeatures(brain, assay = "SCT", features = VariableFeatures(brain)[1:1000], 
+    selection.method = "markvariogram")
+```
+
+Top 6 most spatially variable genes:
+```{r}
+top.features <- head(SpatiallyVariableFeatures(brain, selection.method = "markvariogram"), 6)
+SpatialFeaturePlot(brain, features = top.features, ncol = 3, alpha = c(0.1, 1))
+```
+
+
+## Subset out specific regions
+Subsetting scRNA-SEQ is useful to study specific subpopulations of cells. Same can be done with a spatially organized slide. Subset the frontal cortex sections:
+```{r}
+cortex <- subset(brain, idents = c(1, 2, 3, 5, 6, 7))
+# now remove additional cells, use SpatialDimPlots to visualize what to remove
+# SpatialDimPlot(cortex,cells.highlight = WhichCells(cortex, expression = image_imagerow > 400 |
+# image_imagecol < 150))
+cortex <- subset(cortex, anterior1_imagerow > 400 | anterior1_imagecol < 150, invert = TRUE)
+cortex <- subset(cortex, anterior1_imagerow > 275 & anterior1_imagecol > 370, invert = TRUE)
+cortex <- subset(cortex, anterior1_imagerow > 250 & anterior1_imagecol > 440, invert = TRUE)
+```
+
+Plot:
+```{r}
+p1 <- SpatialDimPlot(cortex, crop = TRUE, label = TRUE)
+p2 <- SpatialDimPlot(cortex, crop = FALSE, label = TRUE, pt.size.factor = 1, label.size = 3)
+p1 + p2
+```
+
+
+## Integration with single-cell data (reference labels)
+Each spot comprises multiple cells. Can deconvolute each spatial voxel (spot?) to get composition of cell types. Seurat team used a reference scRNA-seq dataset of 14k adult mouse cortiical cells from Allen Institute (SMART-Seq2 protocol). 
+
+The Seurat team recommends using Integration methods (not deconvolution methods). Noise profiles are so different in spatial and reference scRNA-Seq datasets that the 'anchor' integration approach outperforms deconvolution. Anchor-based "enables the probabilistic transfer of annotations from a reference to a query set". Available as a vignette and in `sctransform`.
+
+We first load the data (download available here), pre-process the scRNA-seq reference, and then perform label transfer. The procedure outputs, for each spot, a probabilistic classification for each of the scRNA-seq derived classes. We add these predictions as a new assay in the Seurat object.
+
+Download size was 1Gb, and loading it into environment creates a 2.8Gb Large Seurat object!
+```{r}
+allen_reference <- readRDS("allen_cortex.rds")
+```
+
+```{r}
+# note that setting ncells=3000 normalizes the full dataset but learns noise models on 3k cells
+# this speeds up SCTransform dramatically with no loss in performance
+library(dplyr)
+allen_reference <- SCTransform(allen_reference, ncells = 3000, verbose = FALSE) %>% RunPCA(verbose = FALSE) %>% 
+    RunUMAP(dims = 1:30)
+```
+
+Baloons "allen_reference" up to 6Gb!
+```{r}
+# After subsetting, we renormalize cortex
+cortex <- SCTransform(cortex, assay = "Spatial", verbose = FALSE) %>% RunPCA(verbose = FALSE)
+# the annotation is stored in the 'subclass' column of object metadata
+DimPlot(allen_reference, group.by = "subclass", label = TRUE)
+```
+
+Creates an 800 Mb Large AnchorSet called `anchors`
+```{r}
+anchors <- FindTransferAnchors(reference = allen_reference, query = cortex, normalization.method = "SCT")
+predictions.assay <- TransferData(anchorset = anchors, refdata = allen_reference$subclass, prediction.assay = TRUE, 
+    weight.reduction = cortex[["pca"]])
+cortex[["predictions"]] <- predictions.assay
+```
+
+
+Now we get prediction scores for each spot for each class. Of particular interest in the frontal cortex region are the laminar excitatory neurons. Here we can distinguish between distinct sequential layers of these neuronal subtypes, for example:
+```{r}
+DefaultAssay(cortex) <- "predictions"
+SpatialFeaturePlot(cortex, features = c("L2/3 IT", "L4"), pt.size.factor = 1.6, ncol = 2, crop = TRUE)
+```
+
+Based on these prediction scores, we can also predict cell types whose location is spatially restricted. We use the same methods based on marked point processes to define spatially variable features, but use the cell type prediction scores as the "marks" rather than gene expression.
+```{r}
+cortex <- FindSpatiallyVariableFeatures(cortex, assay = "predictions", selection.method = "markvariogram", 
+    features = rownames(cortex), r.metric = 5, slot = "data")
+top.clusters <- head(SpatiallyVariableFeatures(cortex), 4)
+SpatialPlot(object = cortex, features = top.clusters, ncol = 2)
+```
+
+
+Finally, we show that our integrative procedure is capable of recovering the known spatial localization patterns of both neuronal and non-neuronal subsets, including laminar excitatory, layer-1 astrocytes, and the cortical grey matter.
+```{r}
+SpatialFeaturePlot(cortex, features = c("Astro", "L2/3 IT", "L4", "L5 PT", "L5 IT", "L6 CT", "L6 IT", 
+    "L6b", "Oligo"), pt.size.factor = 1, ncol = 2, crop = FALSE, alpha = c(0.1, 1))
+```
+
+```{r}
+#saveRDS(brain, file="brain_final.rds")
+saveRDS(cortex, file="cortex_final.rds")
+saveRDS(anchors, file="anchors_final.rds")
+saveRDS(allen_reference, file="allen_reference_final.rds")
+```
