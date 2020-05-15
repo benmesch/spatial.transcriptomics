@@ -1,0 +1,96 @@
+---
+title: "R Notebook"
+output: md_document
+---
+Ben Mescher
+
+In Seurat (v3.1) spatial vignette, the spatial dataset was matched up to a reference scRNA-seq dataset ("allen_reference"). According to the Seurat authors:
+>*We consistently found superior performance using integration methods (as opposed to deconvolution methods), likely because of substantially different noise models that characterize spatial and single-cell datasets, and integration methods are specifiically designed to be robust to these differences.*
+
+An anchor-based integration was used to transfer labels from allen_reference to the spatial data. This took ~3 hours originally, but I saved the _final results from my run of the vignette.
+```{r}
+library(Seurat)
+allen_reference_final <- readRDS('allen_reference_final.rds') #6GB!
+allen_reference_final[['SCT']] #SCT assay is the normalized data, which was done using the same method, sctransform(), used to normalize the spatial dataset
+```
+
+The cell type labels for the reference single-cell dataset are saved in the "subclass" column. For 14,249 cells, there are 23 cell types:
+```{r}
+length(allen_reference_final$subclass)
+table(allen_reference_final$subclass)
+```
+
+## Predicted Cell-Type Compositions
+The `cortex` Seurat object created in the vignette is a subset of the spatial dataset, for clusters 1, 2, 3, 5, 6, & 7 in a specific section of the slide. Assays in the Seurat object include SCT (the normalized data), pca & umap results, and "predictions" from the anchor-based label transfer.
+```{r}
+cortex_final <- readRDS('cortex_final.rds') #342MB
+names(cortex_final)
+```
+
+Normalization and preprocessing of the data reduced it to 16,017 genes for 1,072 sample spots (named 'cells' here).
+```{r}
+#cortex_final[['Spatial']] #The original subset contained 31,053 genes for 1,072 sample spots from the brain slide (available on 10x site).
+cortex_final[['SCT']] #the normalized dataset contains only 16,017 genes (note that the normalized dataset has a different list of top-10 most variable genes)
+```
+
+The results of the anchor-based label transfer are saved in the 'predictions' assay:
+```{r}
+cortex_final[['predictions']]
+```
+
+The reference listed only 23 subclasses (cell tpes), but there are 24 rows because the final row is a 'max' metadata row.
+```{r}
+cortex_final[['predictions']][,1:5]
+```
+
+## Exploring Cell Type Compositions
+```{r}
+library(tidyr)
+library(ggplot2)
+x <- as.data.frame(cortex_final[['predictions']]@data[-24,1:10])
+x['celltype'] <- rownames(x)
+x <- x %>% pivot_longer(-celltype, names_to='sample', values_to='composition')
+ggplot(x, aes(fill=celltype, y = composition, x = sample))+ 
+  ggtitle('Predicted Cell Type Compositions for 10 Random Spots')+
+  geom_bar(position="stack", stat="identity")+
+  theme(axis.text.x=element_blank())+
+  xlab('Samples (random 10)')
+```
+
+The spatial data was already clustered (this cortex dataset is a subset of clusters 1, 2, 3, 5, 6, & 7).
+```{r}
+table(cortex_final$seurat_clusters)
+```
+
+```{r}
+cl <- 1
+x <- as.data.frame(cortex_final[['predictions']]@data[-24,cortex_final$seurat_clusters==cl])
+x['celltype'] <- rownames(x)
+x <- x %>% pivot_longer(-celltype, names_to='sample', values_to='composition')
+ggplot(x, aes(fill=celltype, y = composition, x = sample))+ 
+  ggtitle(paste('Predicted Cell Type Compositions for Samples in Seurat-defined cluster #',cl))+
+  geom_bar(position="stack", stat="identity")+
+  theme(axis.text.x=element_blank())+
+  xlab(paste('Samples for cluster #',cl))
+```
+
+```{r}
+cl <- 6
+x <- as.data.frame(cortex_final[['predictions']]@data[-24,cortex_final$seurat_clusters==cl])
+x['celltype'] <- rownames(x)
+x <- x %>% pivot_longer(-celltype, names_to='sample', values_to='composition')
+ggplot(x, aes(fill=celltype, y = composition, x = sample))+ 
+  ggtitle(paste('Predicted Cell Type Compositions for Samples in Seurat-defined cluster #',cl))+
+  geom_bar(position="stack", stat="identity")+
+  theme(axis.text.x=element_blank())+
+  xlab(paste('Samples for cluster #',cl))
+```
+
+
+A markvariogram (similar to Trensceek, model cell type compositions as a mark point process) was also used to determine which cell types were spatially-influenced. The ranks for the most-to-least spatially influenced cell types were saved:
+```{r}
+cortex_final[['predictions']]@meta.features
+```
+
+
+
