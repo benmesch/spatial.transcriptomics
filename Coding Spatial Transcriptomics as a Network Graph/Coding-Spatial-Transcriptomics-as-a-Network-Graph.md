@@ -1,11 +1,7 @@
 Code Spatial Tx as a Network Graph
 ==================================
 
-May 25th, 2020. Dive into the data for a specific single cell and a
-single spatial sample which was enriched for that cell's cell type.
-
-Identify a target spatial sample
---------------------------------
+May 25th, 2020
 
 The spatial data is available publically from 10x Genomics. 1,072
 spatially tagged samples for 47,094 genes.
@@ -105,7 +101,7 @@ our target sample is at 61,-39
     ##                     x   y
     ## TGGCAGCAGTAATAGT-1 61 -39
 
-Neighbors:
+Quick identification of neighbors with approximately close locations:
 
     d[58 < d$x & d$x < 64 & -42 < d$y & d$y < -36,c('x','y')]
 
@@ -146,5 +142,29 @@ automatically identified neighbors from the distance matrix:
     names(which(test[,target.sample])) %in% rownames(d[58 < d$x & d$x < 64 & -42 < d$y & d$y < -36,c('x','y')]) #all 5 were in the group of 8 manually identified neighbors
 
     ## [1] TRUE TRUE TRUE TRUE TRUE
+
+Via <https://kateto.net/netscix2016.html>
+
+    inc.edges <- incident(g,  V(g)[target.sample], mode="all")
+    ecol <- rep("gray80", ecount(g))
+    ecol[inc.edges] <- "orange"
+
+    vcol <- rep("grey40", vcount(g)) #color vertices, default is grey40
+    vcol[V(g)==target.sample] <- "gold" #neighbors of target are gold
+    neigh.nodes <- neighbors(g, V(g)[target.sample], mode="out")
+    vcol[neigh.nodes] <- "#ff9d00"
+    #grep("red", colors(), value=T)
+    vcol[sum(V(g)[target.sample])] <- "red2"
+
+    plot(g, vertex.label=NA, vertex.size=2, layout = l
+         ,vertex.color=vcol, edge.color=ecol) #layout_with_kk is pretty good too
+
+![](Coding-Spatial-Transcriptomics-as-a-Network-Graph_files/figure-markdown_strict/unnamed-chunk-10-1.png)
+
+### Maybe apply Community detection?
+
+See <https://kateto.net/netscix2016.html> "High-betweenness edges are
+removed sequentially (recalculating at each step) and the best
+partitioning of the network is selected.""
 
     rm(cortex_final) #remove spatial cortex object from memory
