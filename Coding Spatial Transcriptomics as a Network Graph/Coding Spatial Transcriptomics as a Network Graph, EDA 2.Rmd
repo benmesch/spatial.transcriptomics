@@ -4,18 +4,19 @@ output: md_document
 ---
 
 # Compare scRNA with one spatial sample
-Dive into the data for a specific single cell and a single spatial sample which was enriched for that cell's cell type.
+May 25th, 2020. Dive into the data for a specific single cell and a single spatial sample which was enriched for that cell's cell type.
 
 ```{r}
 library(Seurat)
 library(tidyr)
 library(ggplot2)
+library(igraph)
 ```
 
 ## Identify a target spatial sample
 The spatial data is available publically from 10x Genomics. 1,072 spatially tagged samples for 47,094 genes.
 ```{r}
-cortex_final <- readRDS('2/cortex_final.rds') #342MB
+cortex_final <- readRDS('../2/cortex_final.rds') #342MB
 ```
 ```{r}
 cortex_final
@@ -146,18 +147,11 @@ hist(colSums(test))
 
 ```
 
-```{r}
-library(igraph)
-```
-
-```{r}
+```{r, fig.width = 12, fig.height = 12}
 g <- graph_from_adjacency_matrix(test, mode="undirected")
-g
-```
-
-*Need to have a better way to plot the iGraph back onto the tissue slide. So can verify neighbors and can also visualize our segmentation results better.* For now, "layout_with_kk" seems to work best at recreating the structure of the slide (by modeling each edge as a spring that repels its neighboring nodes).
-```{r}
-plot(g, vertex.label=NA, vertex.size=1, layout = layout_with_kk)
+ #iGraph plotting help: https://kateto.net/netscix2016.html
+l <- as.matrix(d[,1:2])
+plot(g, vertex.label=NA, vertex.size=1, layout = l) #layout_with_kk is pretty good too
 ```
 
 
@@ -196,74 +190,6 @@ names(which(test[,target.sample])) %in% rownames(d[58 < d$x & d$x < 64 & -42 < d
 rm(cortex_final) #remove spatial cortex object from memory
 ```
 
-## Compare spatial expression from the target sample with single cell references of the same cell type
-Our target spatial sample (and almost all other "cluster 1" samples) was composed mainly of Oligo cells. Lets look at some Oligo cells from an scRNA-seq reference set:
-*Come up with a measure of similarity? Then use that same measure to measure similarities to spatial neighbors too.*
-
-## Find reference single cells of the target celltype
-```{r}
-allen_reference_final <- readRDS('2/allen_reference_final.rds') #6GB!
-allen_reference_final[['SCT']] #SCT assay is the normalized data, which was done using the same method, sctransform(), used to normalize the spatial dataset
-```
-
-The allen scRNA-seq reference contains 14,249 cells belonging to 23 labeled cell types:
-```{r}
-x <- as.data.frame(t(as.matrix(table(allen_reference_final$subclass))))
-x <- pivot_longer(x, colnames(x),names_to="celltype",values_to="cellcount")
-ggplot(x, aes(fill=celltype, y = cellcount, x = celltype))+
-  geom_bar(position="stack", stat="identity")+
-  theme(axis.text.x=element_blank())
-```
-
-```{r}
-table(allen_reference_final$subclass)
-```
-
-We only have 91 Oligo cells in the reference set. Choosing the 80th one at random (cell #11,728 in the reference set).
-In transforming the reference set, only the 3,000 most variable genes were used to make SCT.
-```{r}
-#names(allen_reference_final) #rna is base data, sct is transformed and normalized, pca & umap are the dimension reduction results
-r <- which(allen_reference_final$subclass == "Oligo")[80] #cell 3551 in the dataset
-dim(allen_reference_final[['RNA']]@data)
-rownames(allen_reference_final[['SCT']]@meta.features)[1:5] #gene names...
-
-x <- allen_reference_final[['RNA']]@data[,r]
-names(x) <- allen_reference_final[['SCT']]@data@Dimnames[[2]]
-allen_reference_final[['SCT']]@data@Dimnames[[2]][1:5]
-summary(x)
-```
-
-25 out of 34 high expression genes are in the reference set:
-```{r}
-length(target.high.expr.genes)
-sum(rownames(allen_reference_final[['SCT']]@meta.features) %in% target.high.expr.genes)
-sum(rownames(allen_reference_final[['RNA']]@meta.features) %in% target.high.expr.genes)
-```
-
-```{r}
-length(x)
-length(x[x<100000])
-hist(x[x>0 & x<1000])
-```
-
-
-Perform the same analysis on this Oligo cell that was done on the spatial sample. The distribution is extremely wide for this single cell.
-```{r}
-ggplot(as.data.frame(x[x>0 & x < 1000]), aes("",x[x>0 & x < 1000])) + 
-  geom_violin() +
-  scale_y_continuous('transformed expression level', seq(0,1000,100)) +
-  scale_x_discrete(paste("nonzero expressions for spatial sample:",target.sample))
-```
-
-There are 84 genes above 2,000 expression value. Only 1 of them was one of the 25 (/34) high expression genes in our sample. Is that just noise from our one cell? From our target spatial sample?  
-```{r}
-sum(rownames(allen_reference_final[['SCT']]@meta.features[which(x>2000),]) %in% target.high.expr.genes)
-length(x[x>2000])
-```
-
-```{r}
-rm(allen_reference_final)
-```
 
 
 

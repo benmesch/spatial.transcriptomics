@@ -1,8 +1,8 @@
 Compare scRNA with one spatial sample
 =====================================
 
-Dive into the data for a specific single cell and a single spatial
-sample which was enriched for that cell's cell type.
+May 25th, 2020. Dive into the data for a specific single cell and a
+single spatial sample which was enriched for that cell's cell type.
 
     library(Seurat)
     library(tidyr)
@@ -13,13 +13,32 @@ sample which was enriched for that cell's cell type.
 
     ## Warning: package 'ggplot2' was built under R version 3.6.3
 
+    library(igraph)
+
+    ## Warning: package 'igraph' was built under R version 3.6.3
+
+    ## 
+    ## Attaching package: 'igraph'
+
+    ## The following object is masked from 'package:tidyr':
+    ## 
+    ##     crossing
+
+    ## The following objects are masked from 'package:stats':
+    ## 
+    ##     decompose, spectrum
+
+    ## The following object is masked from 'package:base':
+    ## 
+    ##     union
+
 Identify a target spatial sample
 --------------------------------
 
 The spatial data is available publically from 10x Genomics. 1,072
 spatially tagged samples for 47,094 genes.
 
-    cortex_final <- readRDS('2/cortex_final.rds') #342MB
+    cortex_final <- readRDS('../2/cortex_final.rds') #342MB
 
     cortex_final
 
@@ -285,50 +304,12 @@ Manually set a cutoff Euclidean distance of 2.1
 
 ![](Coding-Spatial-Transcriptomics-as-a-Network-Graph,-EDA-2_files/figure-markdown_strict/unnamed-chunk-15-2.png)
 
-    library(igraph)
-
-    ## Warning: package 'igraph' was built under R version 3.6.3
-
-    ## 
-    ## Attaching package: 'igraph'
-
-    ## The following object is masked from 'package:tidyr':
-    ## 
-    ##     crossing
-
-    ## The following objects are masked from 'package:stats':
-    ## 
-    ##     decompose, spectrum
-
-    ## The following object is masked from 'package:base':
-    ## 
-    ##     union
-
     g <- graph_from_adjacency_matrix(test, mode="undirected")
-    g
+     #iGraph plotting help: https://kateto.net/netscix2016.html
+    l <- as.matrix(d[,1:2])
+    plot(g, vertex.label=NA, vertex.size=1, layout = l) #layout_with_kk is pretty good too
 
-    ## IGRAPH 555d321 UN-- 1072 4024 -- 
-    ## + attr: name (v/c)
-    ## + edges from 555d321 (vertex names):
-    ##  [1] AAACAGAGCGACTCCT-1--CAGCCTCTCCTCAAGA-1
-    ##  [2] AAACAGAGCGACTCCT-1--GCAACCACCAGACCGG-1
-    ##  [3] AAACAGAGCGACTCCT-1--GCTCATTACTGCATGT-1
-    ##  [4] AAACAGAGCGACTCCT-1--TCACTACGACCAATGC-1
-    ##  [5] AAACAGAGCGACTCCT-1--TCACTCGTGCAACGGC-1
-    ##  [6] AAACAGAGCGACTCCT-1--TCTCGAACGAGGTCAC-1
-    ##  [7] AAACAGAGCGACTCCT-1--TGAGATTAGGCCCTAA-1
-    ##  [8] AAACAGAGCGACTCCT-1--TTGCGTGAACGCTTAG-1
-    ## + ... omitted several edges
-
-*Need to have a better way to plot the iGraph back onto the tissue
-slide. So can verify neighbors and can also visualize our segmentation
-results better.* For now, "layout\_with\_kk" seems to work best at
-recreating the structure of the slide (by modeling each edge as a spring
-that repels its neighboring nodes).
-
-    plot(g, vertex.label=NA, vertex.size=1, layout = layout_with_kk)
-
-![](Coding-Spatial-Transcriptomics-as-a-Network-Graph,-EDA-2_files/figure-markdown_strict/unnamed-chunk-18-1.png)
+![](Coding-Spatial-Transcriptomics-as-a-Network-Graph,-EDA-2_files/figure-markdown_strict/unnamed-chunk-16-1.png)
 
 ### Verify that our target sample's neighbors are properly accounted for in the conversion to an adjaceny matrix and then to a network graph...
 
@@ -365,7 +346,7 @@ Neighbors:
     ggplot(d,aes(x,y,color = as.factor(color)))+
       geom_point()
 
-![](Coding-Spatial-Transcriptomics-as-a-Network-Graph,-EDA-2_files/figure-markdown_strict/unnamed-chunk-21-1.png)
+![](Coding-Spatial-Transcriptomics-as-a-Network-Graph,-EDA-2_files/figure-markdown_strict/unnamed-chunk-19-1.png)
 
 Verify the 8 manually identified neighbors were all included in the
 automatically identified neighbors from the distance matrix:
@@ -382,121 +363,3 @@ automatically identified neighbors from the distance matrix:
     ## [1] TRUE TRUE TRUE TRUE TRUE
 
     rm(cortex_final) #remove spatial cortex object from memory
-
-Compare spatial expression from the target sample with single cell references of the same cell type
----------------------------------------------------------------------------------------------------
-
-Our target spatial sample (and almost all other "cluster 1" samples) was
-composed mainly of Oligo cells. Lets look at some Oligo cells from an
-scRNA-seq reference set: *Come up with a measure of similarity? Then use
-that same measure to measure similarities to spatial neighbors too.*
-
-Find reference single cells of the target celltype
---------------------------------------------------
-
-    allen_reference_final <- readRDS('2/allen_reference_final.rds') #6GB!
-    allen_reference_final[['SCT']] #SCT assay is the normalized data, which was done using the same method, sctransform(), used to normalize the spatial dataset
-
-    ## Assay data with 34608 features for 14249 cells
-    ## Top 10 variable features:
-    ##  Vip, Sst, Npy, Tac2, Crh, Calb2, Tac1, Cxcl14, Penk, Gad1
-
-The allen scRNA-seq reference contains 14,249 cells belonging to 23
-labeled cell types:
-
-    x <- as.data.frame(t(as.matrix(table(allen_reference_final$subclass))))
-    x <- pivot_longer(x, colnames(x),names_to="celltype",values_to="cellcount")
-    ggplot(x, aes(fill=celltype, y = cellcount, x = celltype))+
-      geom_bar(position="stack", stat="identity")+
-      theme(axis.text.x=element_blank())
-
-![](Coding-Spatial-Transcriptomics-as-a-Network-Graph,-EDA-2_files/figure-markdown_strict/unnamed-chunk-25-1.png)
-
-    table(allen_reference_final$subclass)
-
-    ## 
-    ##      Astro         CR       Endo    L2/3 IT         L4      L5 IT      L5 PT 
-    ##        368          7         94        982       1401        880        544 
-    ##      L6 CT      L6 IT        L6b      Lamp5 Macrophage      Meis2         NP 
-    ##        960       1872        358       1122         51         45        362 
-    ##      Oligo       Peri      Pvalb   Serpinf1        SMC       Sncg        Sst 
-    ##         91         32       1337         27         55        125       1741 
-    ##        Vip       VLMC 
-    ##       1728         67
-
-We only have 91 Oligo cells in the reference set. Choosing the 80th one
-at random (cell \#11,728 in the reference set). In transforming the
-reference set, only the 3,000 most variable genes were used to make SCT.
-
-    #names(allen_reference_final) #rna is base data, sct is transformed and normalized, pca & umap are the dimension reduction results
-    r <- which(allen_reference_final$subclass == "Oligo")[80] #cell 3551 in the dataset
-    dim(allen_reference_final[['RNA']]@data)
-
-    ## [1] 34617 14249
-
-    rownames(allen_reference_final[['SCT']]@meta.features)[1:5] #gene names...
-
-    ## [1] "0610005C13Rik" "0610006L08Rik" "0610007P14Rik" "0610009B22Rik"
-    ## [5] "0610009E02Rik"
-
-    x <- allen_reference_final[['RNA']]@data[,r]
-    names(x) <- allen_reference_final[['SCT']]@data@Dimnames[[2]]
-    allen_reference_final[['SCT']]@data@Dimnames[[2]][1:5]
-
-    ## [1] "F1S4_160108_001_A01" "F1S4_160108_001_B01" "F1S4_160108_001_C01"
-    ## [4] "F1S4_160108_001_D01" "F1S4_160108_001_E01"
-
-    summary(x)
-
-    ##      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-    ##      0.00      0.00      0.00     44.69      0.00 101216.00
-
-25 out of 34 high expression genes are in the reference set:
-
-    length(target.high.expr.genes)
-
-    ## [1] 34
-
-    sum(rownames(allen_reference_final[['SCT']]@meta.features) %in% target.high.expr.genes)
-
-    ## [1] 25
-
-    sum(rownames(allen_reference_final[['RNA']]@meta.features) %in% target.high.expr.genes)
-
-    ## [1] 25
-
-    length(x)
-
-    ## [1] 34617
-
-    length(x[x<100000])
-
-    ## [1] 34616
-
-    hist(x[x>0 & x<1000])
-
-![](Coding-Spatial-Transcriptomics-as-a-Network-Graph,-EDA-2_files/figure-markdown_strict/unnamed-chunk-29-1.png)
-
-Perform the same analysis on this Oligo cell that was done on the
-spatial sample. The distribution is extremely wide for this single cell.
-
-    ggplot(as.data.frame(x[x>0 & x < 1000]), aes("",x[x>0 & x < 1000])) + 
-      geom_violin() +
-      scale_y_continuous('transformed expression level', seq(0,1000,100)) +
-      scale_x_discrete(paste("nonzero expressions for spatial sample:",target.sample))
-
-![](Coding-Spatial-Transcriptomics-as-a-Network-Graph,-EDA-2_files/figure-markdown_strict/unnamed-chunk-30-1.png)
-
-There are 84 genes above 2,000 expression value. Only 1 of them was one
-of the 25 (/34) high expression genes in our sample. Is that just noise
-from our one cell? From our target spatial sample?
-
-    sum(rownames(allen_reference_final[['SCT']]@meta.features[which(x>2000),]) %in% target.high.expr.genes)
-
-    ## [1] 1
-
-    length(x[x>2000])
-
-    ## [1] 84
-
-    rm(allen_reference_final)
