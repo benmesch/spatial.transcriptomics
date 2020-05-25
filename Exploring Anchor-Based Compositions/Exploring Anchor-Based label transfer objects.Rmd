@@ -8,9 +8,9 @@ In Seurat (v3.1) spatial vignette, the spatial dataset was matched up to a refer
 >*We consistently found superior performance using integration methods (as opposed to deconvolution methods), likely because of substantially different noise models that characterize spatial and single-cell datasets, and integration methods are specifiically designed to be robust to these differences.*
 
 An anchor-based integration was used to transfer labels from allen_reference to the spatial data. This took ~3 hours originally, but I saved the _final results from my run of the vignette.
-```{r}
+```{r, include=FALSE}
 library(Seurat)
-#allen_reference_final <- readRDS('../allen_reference_final.rds') #6GB!
+#allen_reference_final <- readRDS('../2/allen_reference_final.rds') #6GB!
 #allen_reference_final[['SCT']] #SCT assay is the normalized data, which was done using the same method, sctransform(), used to normalize the spatial dataset
 ```
 
@@ -23,7 +23,7 @@ The cell type labels for the reference single-cell dataset are saved in the "sub
 ## Predicted Cell-Type Compositions
 The `cortex` Seurat object created in the vignette is a subset of the spatial dataset, for clusters 1, 2, 3, 5, 6, & 7 in a specific section of the slide. Assays in the Seurat object include SCT (the normalized data), pca & umap results, and "predictions" from the anchor-based label transfer.
 ```{r}
-cortex_final <- readRDS('../cortex_final.rds') #342MB
+cortex_final <- readRDS('../2/cortex_final.rds') #342MB
 cortex_final
 ```
 
@@ -103,7 +103,7 @@ A markvariogram (similar to Trensceek, model cell type compositions as a mark po
 cortex_final[['predictions']]@meta.features
 ```
 
-## Overlaying Plots onto Tissue Images
+## May 22nd: Overlaying Plots onto Tissue Images
 Can use "predictions" assay of cell types to overlay onto tissue image:
 ```{r}
 DefaultAssay(cortex_final) <- "predictions"
@@ -179,3 +179,178 @@ ggplot(all, aes(x, y) ) +
   geom_density_2d()
 ```
 
+
+
+# May 25th, Compare scRNA with one spatial sample
+Dive into the data for a specific single cell and a single spatial sample which was enriched for that cell's cell type.
+
+## Compare spatial expression from the target sample with single cell references of the same cell type
+Our target spatial sample (and almost all other "cluster 1" samples) was composed mainly of Oligo cells. Lets look at some Oligo cells from an scRNA-seq reference set:
+*Come up with a measure of similarity? Then use that same measure to measure similarities to spatial neighbors too.*
+```{r}
+#cortex_final
+#names(cortex_final) 
+#spatial is the base data, sct is the normalized data, predictions are the anchor-based integration results, pca & umap dim reduction results, anterior1 are the tissue image and mapping tables
+```
+
+There are 70 spatial samples that were placed in cluster 1 in an earlier analysis. The Oligo celltype seems to be the dominant label for most, but not all, of the cluster 1 samples. Median anchor-based integration output for cluster 1 cells is .9933 (out of 1.0).
+```{r}
+cl <- 1
+target.celltype <- "Oligo"
+x <- as.data.frame(cortex_final[['predictions']]@data[-24,cortex_final$seurat_clusters==cl])
+#dim(x)
+summary(t(x[rownames(x)==target.celltype,]))
+#boxplot(x[rownames(x)==target.celltype,])
+```
+
+Our randomly selected cluster 1 sample is "TGGCAGCAGTAATAGT-1", which was predicted to be componsed of .9949 Oligo celltype.
+```{r}
+set.seed(1989)
+target.sample <- sample(colnames(x),1)
+target.sample #"TGGCAGCAGTAATAGT-1"
+x[,colnames(x)==target.sample]
+```
+
+That spatial sample contains 16,017 normalized gene expression levels between 0.0 and 7.35:
+```{r}
+m <- which(cortex_final[['SCT']]@data@Dimnames[[2]] == target.sample) #our target sample is the 974th out of 1,072 in the SCT & Spatial assays
+spatial.sample <- as.data.frame(cortex_final[['SCT']]@data[,m]) #to save space, could always set row.names = NULL and get gene names from the original seurat object
+dim(spatial.sample) #16,017 genes for this one transformed spot
+colnames(spatial.sample) <- 'SCT'
+#spatial.sample <- cbind(spatial.sample, as.data.frame(cortex_final[['Spatial']]@data[,m])) #would like to see how they normalized from Spatial assay to SCT assay. Cant do a simble cbind because the original Spatial data had 31053 genes but only 16017 are included in the cleaned SCT assay
+summary(spatial.sample)
+```
+
+## Identify highly expressed genes
+Out of 16,017 genes, 11,092 were zero [69%] and 4,925 were above zero [31%].
+
+```{r}
+sum(spatial.sample == 0)
+sum(spatial.sample > 0)
+spatial.sample.nonzeros <- as.data.frame(spatial.sample[spatial.sample > 0,])
+colnames(spatial.sample.nonzeros) <- 'SCT'
+summary(spatial.sample.nonzeros)
+
+```
+
+Majority of the SCT (normalized) expressions for this sample were below 3.
+```{r}
+ggplot(spatial.sample.nonzeros, aes("",SCT)) + 
+  geom_violin() + #couldnt get seurat VlnPlot to cooperate
+  scale_y_continuous('transformed expression level', seq(0,7,1)) +
+  scale_x_discrete(paste("nonzero expressions for spatial sample:",target.sample))
+```
+
+Lets bin the data for the expressions from the spatial sample and see how many genes are in each bin:
+```{r}
+breaks <- c(seq(0,3,.25), seq(4,8,1))
+spatial.sample.bins <- cut(as.numeric(spatial.sample[,1]), breaks, include.lowest = TRUE)
+table(spatial.sample.bins)
+```
+
+There are only a 34 genes with expression over 4.
+```{r}
+target.high.expr.genes <- row.names(spatial.sample)[spatial.sample > 4]
+length(target.high.expr.genes)
+```
+
+Is 34 genes over expression 4 a lot? Lets compare to the other spatial samples... The median number of genes over normalized expression level 4 is 27 [IQR 25,29]
+```{r}
+x <- colSums(as.matrix(cortex_final[['SCT']]@data>4))
+length(x)
+summary(x)
+```
+
+Is 34 genes over expression 4 a lot for this particular cluster [1]? Not necessarily, as clusters 1 & 2 have a higher mean number of 4.0+ genes. *Not sure if the cell density of sample spots affects the gene counts, or if that has been claculated out in the normalization process.*
+```{r}
+#identical(names(x), names(cortex_final$seurat_clusters)) #samples are listed in the same order
+x <- cbind.data.frame(x,cortex_final$seurat_clusters)
+dim(x)
+names(x) <- c('Number of genes over 4.0','seurat cluster')
+ggplot(x, aes(x=`seurat cluster`,y=`Number of genes over 4.0`)) + 
+  geom_jitter(aes(color='blue'),alpha=0.2) +
+  geom_boxplot(fill="bisque",color="black",alpha=0.3) + 
+  #labs(x='mean education per house') +
+  guides(color=FALSE) +
+  theme_minimal() 
+```
+
+So are there genes that are just high in all clusters? Or are some genes only high in some clusters (can do chi squared test for enrichment?)
+
+Looking at only the first 4 high-epxression genes from the target sample, some are higher across the whole tissue, while others are more localized in high expression:
+```{r}
+target.high.expr.genes
+DefaultAssay(cortex_final) <- "SCT"
+SpatialPlot(cortex_final, images='anterior1', features=target.high.expr.genes[1:4], ncol=2)
+```
+
+
+## For each of the 34 high expr genes... take one gene, compare its level to its level in the neighboring spots?
+Can turn this one-gene-level data into a network graph, segmentation on it? Look for areas with a steep drop off?? Could do the same with celltype predictions too.
+Plp1 or Tmsb4x look like a good candidates because they have a wide range of levels in the slide. 
+
+
+## Find reference single cells of the target celltype
+```{r}
+allen_reference_final <- readRDS('../2/allen_reference_final.rds') #6GB!
+allen_reference_final[['SCT']] #SCT assay is the normalized data, which was done using the same method, sctransform(), used to normalize the spatial dataset
+```
+
+The allen scRNA-seq reference contains 14,249 cells belonging to 23 labeled cell types:
+```{r}
+x <- as.data.frame(t(as.matrix(table(allen_reference_final$subclass))))
+x <- pivot_longer(x, colnames(x),names_to="celltype",values_to="cellcount")
+ggplot(x, aes(fill=celltype, y = cellcount, x = celltype))+
+  geom_bar(position="stack", stat="identity")+
+  theme(axis.text.x=element_blank())
+```
+
+```{r}
+table(allen_reference_final$subclass)
+```
+
+We only have 91 Oligo cells in the reference set. Choosing the 80th one at random (cell #11,728 in the reference set).
+In transforming the reference set, only the 3,000 most variable genes were used to make SCT.
+```{r}
+#names(allen_reference_final) #rna is base data, sct is transformed and normalized, pca & umap are the dimension reduction results
+r <- which(allen_reference_final$subclass == "Oligo")[80] #cell 3551 in the dataset
+dim(allen_reference_final[['RNA']]@data)
+rownames(allen_reference_final[['SCT']]@meta.features)[1:5] #gene names...
+
+x <- allen_reference_final[['RNA']]@data[,r]
+names(x) <- allen_reference_final[['SCT']]@data@Dimnames[[2]]
+allen_reference_final[['SCT']]@data@Dimnames[[2]][1:5]
+summary(x)
+```
+
+25 out of 34 high expression genes are in the reference set:
+```{r}
+length(target.high.expr.genes)
+sum(rownames(allen_reference_final[['SCT']]@meta.features) %in% target.high.expr.genes)
+sum(rownames(allen_reference_final[['RNA']]@meta.features) %in% target.high.expr.genes)
+```
+
+```{r}
+length(x)
+length(x[x<100000])
+hist(x[x>0 & x<1000])
+```
+
+
+Perform the same analysis on this Oligo cell that was done on the spatial sample. The distribution is extremely wide for this single cell.
+```{r}
+ggplot(as.data.frame(x[x>0 & x < 1000]), aes("",x[x>0 & x < 1000])) + 
+  geom_violin() +
+  scale_y_continuous('transformed expression level', seq(0,1000,100)) +
+  scale_x_discrete(paste("nonzero expressions for spatial sample:",target.sample))
+```
+
+There are 84 genes above 2,000 expression value. Only 1 of them was one of the 25 (/34) high expression genes in our sample. Is that just noise from our one cell? From our target spatial sample?  
+```{r}
+sum(rownames(allen_reference_final[['SCT']]@meta.features[which(x>2000),]) %in% target.high.expr.genes)
+length(x[x>2000])
+```
+
+```{r}
+rm(allen_reference_final)
+```
