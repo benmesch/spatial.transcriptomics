@@ -1,0 +1,97 @@
+---
+title: "May 25th Test, Code Spatial Tx as a Network Graph"
+output: md_document
+---
+
+# Code Spatial Tx as a Network Graph
+May 25th, 2020. Dive into the data for a specific single cell and a single spatial sample which was enriched for that cell's cell type.
+
+```{r, include=FALSE}
+library(Seurat)
+library(tidyr)
+library(ggplot2)
+library(igraph)
+```
+
+## Identify a target spatial sample
+The spatial data is available publically from 10x Genomics. 1,072 spatially tagged samples for 47,094 genes.
+```{r}
+cortex_final <- readRDS('../2/cortex_final.rds') #342MB
+```
+
+Retrieve spatial sample coordinates and the cell type prediction results from an earlier anchor-based label transfer:
+```{r}
+d <- data.frame(cortex_final[['anterior1']]@coordinates[,c('col','row')])
+d['row'] <- d['row'] * -1
+colnames(d) <- c('x','y')
+d <- cbind(d,t(as.matrix((cortex_final[['predictions']]@data))))
+dim(d)
+d[1:10,1:5]
+```
+
+## Convert spatial samples into a network graph
+Manually set a cutoff Euclidean distance of 2.1
+```{r}
+test <- as.matrix(dist(data.frame(d[,1:2])))
+typeof(test)
+dim(test)
+
+test[1:10,1:5]
+
+hist(colSums((test)<2.1))
+
+#count(which(as.numeric(test[,1]) <= 20))
+#hist(colSums(test>0 & test<6))
+
+test <- test>0 & test<2.1 #close neighbors only
+hist(colSums(test))
+
+```
+
+```{r, fig.width = 12, fig.height = 12}
+g <- graph_from_adjacency_matrix(test, mode="undirected")
+ #iGraph plotting help: https://kateto.net/netscix2016.html
+l <- as.matrix(d[,1:2])
+plot(g, vertex.label=NA, vertex.size=1, layout = l) #layout_with_kk is pretty good too
+```
+
+
+
+
+
+### Verify that our target sample's neighbors are properly accounted for in the conversion to an adjaceny matrix and then to a network graph...
+our target sample is at 61,-39
+```{r}
+target.sample <- "TGGCAGCAGTAATAGT-1"
+d[target.sample,c('x','y')] #our target sample is at 61,-39
+```
+
+Neighbors:
+```{r}
+d[58 < d$x & d$x < 64 & -42 < d$y & d$y < -36,c('x','y')]
+
+```
+
+```{r}
+d$color <- as.numeric(58 < d$x & d$x < 64 & -42 < d$y & d$y < -36) #the neighbors
+d[target.sample,'color'] <- 9 #our target
+table(d$color)
+ggplot(d,aes(x,y,color = as.factor(color)))+
+  geom_point()
+```
+
+Verify the 8 manually identified neighbors were all included in the automatically identified neighbors from the distance matrix:
+```{r}
+which(test[,target.sample]) #the adjacency matrix identified 5 neighbors that met the maximum distance threshold
+names(which(test[,target.sample])) %in% rownames(d[58 < d$x & d$x < 64 & -42 < d$y & d$y < -36,c('x','y')]) #all 5 were in the group of 8 manually identified neighbors
+```
+
+
+
+```{r}
+rm(cortex_final) #remove spatial cortex object from memory
+```
+
+
+
+
