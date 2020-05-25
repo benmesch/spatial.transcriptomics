@@ -13,31 +13,14 @@ allen\_reference to the spatial data. This took ~3 hours originally, but
 I saved the \_final results from my run of the vignette.
 
     library(Seurat)
-    allen_reference_final <- readRDS('allen_reference_final.rds') #6GB!
-    allen_reference_final[['SCT']] #SCT assay is the normalized data, which was done using the same method, sctransform(), used to normalize the spatial dataset
-
-    ## Assay data with 34608 features for 14249 cells
-    ## Top 10 variable features:
-    ##  Vip, Sst, Npy, Tac2, Crh, Calb2, Tac1, Cxcl14, Penk, Gad1
+    #allen_reference_final <- readRDS('../allen_reference_final.rds') #6GB!
+    #allen_reference_final[['SCT']] #SCT assay is the normalized data, which was done using the same method, sctransform(), used to normalize the spatial dataset
 
 The cell type labels for the reference single-cell dataset are saved in
 the "subclass" column. For 14,249 cells, there are 23 cell types:
 
-    length(allen_reference_final$subclass)
-
-    ## [1] 14249
-
-    table(allen_reference_final$subclass)
-
-    ## 
-    ##      Astro         CR       Endo    L2/3 IT         L4      L5 IT      L5 PT 
-    ##        368          7         94        982       1401        880        544 
-    ##      L6 CT      L6 IT        L6b      Lamp5 Macrophage      Meis2         NP 
-    ##        960       1872        358       1122         51         45        362 
-    ##      Oligo       Peri      Pvalb   Serpinf1        SMC       Sncg        Sst 
-    ##         91         32       1337         27         55        125       1741 
-    ##        Vip       VLMC 
-    ##       1728         67
+    #length(allen_reference_final$subclass)
+    #table(allen_reference_final$subclass)
 
 Predicted Cell-Type Compositions
 --------------------------------
@@ -48,7 +31,15 @@ of the slide. Assays in the Seurat object include SCT (the normalized
 data), pca & umap results, and "predictions" from the anchor-based label
 transfer.
 
-    cortex_final <- readRDS('cortex_final.rds') #342MB
+    cortex_final <- readRDS('../cortex_final.rds') #342MB
+    cortex_final
+
+    ## An object of class Seurat 
+    ## 47094 features across 1072 samples within 3 assays 
+    ## Active assay: predictions (24 features, 0 variable features)
+    ##  2 other assays present: Spatial, SCT
+    ##  2 dimensional reductions calculated: pca, umap
+
     names(cortex_final)
 
     ## [1] "Spatial"     "SCT"         "predictions" "pca"         "umap"       
@@ -149,7 +140,7 @@ Exploring Cell Type Compositions
       theme(axis.text.x=element_blank())+
       xlab('Samples (random 10)')
 
-![](Exploring-Anchor-Based-label-transfer-objects_files/figure-markdown_strict/unnamed-chunk-7-1.png)
+![](Exploring-Anchor-Based-label-transfer-objects_files/figure-markdown_strict/unnamed-chunk-8-1.png)
 
 The spatial data was already clustered (this cortex dataset is a subset
 of clusters 1, 2, 3, 5, 6, & 7).
@@ -159,6 +150,16 @@ of clusters 1, 2, 3, 5, 6, & 7).
     ## 
     ##   0   1   2   3   4   5   6   7   8   9  10  11  12  13  14 
     ##   0  70 255 217   0 131 202 197   0   0   0   0   0   0   0
+
+    SpatialDimPlot(cortex_final, label = TRUE, label.size = 3)
+
+    ## Warning: Using `as.character()` on a quosure is deprecated as of rlang 0.3.0.
+    ## Please use `as_label()` or `as_name()` instead.
+    ## This warning is displayed once per session.
+
+![](Exploring-Anchor-Based-label-transfer-objects_files/figure-markdown_strict/unnamed-chunk-10-1.png)
+
+    #SpatialPlot(cortex_final, label = TRUE, label.size = 3, group.by="seurat_clusters") #identical
 
     cl <- 1
     x <- as.data.frame(cortex_final[['predictions']]@data[-24,cortex_final$seurat_clusters==cl])
@@ -170,7 +171,7 @@ of clusters 1, 2, 3, 5, 6, & 7).
       theme(axis.text.x=element_blank())+
       xlab(paste('Samples for cluster #',cl))
 
-![](Exploring-Anchor-Based-label-transfer-objects_files/figure-markdown_strict/unnamed-chunk-9-1.png)
+![](Exploring-Anchor-Based-label-transfer-objects_files/figure-markdown_strict/unnamed-chunk-11-1.png)
 
     cl <- 6
     x <- as.data.frame(cortex_final[['predictions']]@data[-24,cortex_final$seurat_clusters==cl])
@@ -182,7 +183,7 @@ of clusters 1, 2, 3, 5, 6, & 7).
       theme(axis.text.x=element_blank())+
       xlab(paste('Samples for cluster #',cl))
 
-![](Exploring-Anchor-Based-label-transfer-objects_files/figure-markdown_strict/unnamed-chunk-10-1.png)
+![](Exploring-Anchor-Based-label-transfer-objects_files/figure-markdown_strict/unnamed-chunk-12-1.png)
 
 A markvariogram (similar to Trensceek, model cell type compositions as a
 mark point process) was also used to determine which cell types were
@@ -241,3 +242,137 @@ influenced cell types were saved:
     ## VLMC                                           9
     ## SMC                                            5
     ## max                                           14
+
+Overlaying Plots onto Tissue Images
+-----------------------------------
+
+Can use "predictions" assay of cell types to overlay onto tissue image:
+
+    DefaultAssay(cortex_final) <- "predictions"
+    SpatialFeaturePlot(cortex_final, features = c("L2/3 IT", "L4"), pt.size.factor = 1.6, ncol = 2, crop = TRUE)
+
+![](Exploring-Anchor-Based-label-transfer-objects_files/figure-markdown_strict/unnamed-chunk-14-1.png)
+
+Can set default assay back to the transformed data to plot specific gene
+expressions overlayed onto the slide image:
+
+    DefaultAssay(cortex_final) <- "SCT"
+    SpatialPlot(cortex_final, images='anterior1', features=c("Hpca", "Ttr","Mbp"), ncol=1)
+
+![](Exploring-Anchor-Based-label-transfer-objects_files/figure-markdown_strict/unnamed-chunk-15-1.png)
+
+    DefaultAssay(cortex_final) <- "predictions"
+
+Clusters from dimensionality reduction (PCA or UMAP) analysis:
+
+    SpatialPlot(cortex_final, group.by="seurat_clusters")
+
+![](Exploring-Anchor-Based-label-transfer-objects_files/figure-markdown_strict/unnamed-chunk-16-1.png)
+
+    #SpatialPlot(cortex_final, images='anterior1')
+    SpatialDimPlot(cortex_final, cells.highlight = CellsByIdentities(object = cortex_final, idents = c(1,2,3,5,6,7)), facet.highlight = TRUE, ncol = 2)
+
+![](Exploring-Anchor-Based-label-transfer-objects_files/figure-markdown_strict/unnamed-chunk-17-1.png)
+
+Image & sample coordinates are saved in the object:
+
+    slotNames(cortex_final[['anterior1']])
+
+    ## [1] "image"         "scale.factors" "coordinates"   "spot.radius"  
+    ## [5] "assay"         "key"
+
+    head(cortex_final[['anterior1']]@coordinates)
+
+    ##                    tissue row col imagerow imagecol
+    ## AAACAGAGCGACTCCT-1      1  14  94     3164     7950
+    ## AAACCGGGTAGGTACC-1      1  42  28     6517     3407
+    ## AAACCGTTCGTCCAGG-1      1  52  42     7715     4371
+    ## AAACTCGTGATATAAG-1      1  23 113     4242     9258
+    ## AAAGGGATGTAGCAAG-1      1  24  62     4362     5747
+    ## AAATAACCATACGGGA-1      1  14  88     3164     7537
+
+    plot(cortex_final[['anterior1']]@coordinates$col,cortex_final[['anterior1']]@coordinates$row * -1) #same rotation as the breast tissue (2016), must be a 10x thing
+
+![](Exploring-Anchor-Based-label-transfer-objects_files/figure-markdown_strict/unnamed-chunk-20-1.png)
+
+    #plot(cortex_final[['anterior1']]@coordinates$imagecol, cortex_final[['anterior1']]@coordinates$imagerow * -1) #upscaled coordinates?
+
+    predictions <- t(as.matrix((cortex_final[['predictions']]@data)))
+    dim(predictions)
+
+    ## [1] 1072   24
+
+    head(predictions)
+
+    ##                             Vip        Lamp5       Sst         Sncg Serpinf1
+    ## AAACAGAGCGACTCCT-1 0.000000e+00 0.000000e+00 0.0000000 0.000000e+00        0
+    ## AAACCGGGTAGGTACC-1 3.129354e-02 0.000000e+00 0.2121399 0.000000e+00        0
+    ## AAACCGTTCGTCCAGG-1 1.937322e-05 1.452998e-05 0.0000000 5.811775e-05        0
+    ## AAACTCGTGATATAAG-1 0.000000e+00 0.000000e+00 0.0000000 0.000000e+00        0
+    ## AAAGGGATGTAGCAAG-1 1.519495e-01 2.589553e-03 0.2130934 0.000000e+00        0
+    ## AAATAACCATACGGGA-1 3.022401e-01 8.213392e-02 0.0000000 1.093476e-04        0
+    ##                          Pvalb       Endo Peri      L6 CT       L6b L6 IT
+    ## AAACAGAGCGACTCCT-1 0.000000000 0.00000000    0 0.00000000 0.0000000     0
+    ## AAACCGGGTAGGTACC-1 0.008067108 0.00000000    0 0.00000000 0.0000000     0
+    ## AAACCGTTCGTCCAGG-1 0.000000000 0.02895847    0 0.00000000 0.0000000     0
+    ## AAACTCGTGATATAAG-1 0.000000000 0.00000000    0 0.01954665 0.3814934     0
+    ## AAAGGGATGTAGCAAG-1 0.015878955 0.00000000    0 0.00000000 0.0000000     0
+    ## AAATAACCATACGGGA-1 0.000000000 0.00000000    0 0.00000000 0.0000000     0
+    ##                      L2/3 IT CR     L5 PT         NP         L4    L5 IT
+    ## AAACAGAGCGACTCCT-1 1.0000000  0 0.0000000 0.00000000 0.00000000 0.000000
+    ## AAACCGGGTAGGTACC-1 0.3179080  0 0.1659479 0.00000000 0.26464364 0.000000
+    ## AAACCGTTCGTCCAGG-1 0.0000000  0 0.0000000 0.00000000 0.00000000 0.000000
+    ## AAACTCGTGATATAAG-1 0.0000000  0 0.0000000 0.01035563 0.00000000 0.000000
+    ## AAAGGGATGTAGCAAG-1 0.0000000  0 0.0000000 0.00000000 0.05377252 0.562716
+    ## AAATAACCATACGGGA-1 0.6155166  0 0.0000000 0.00000000 0.00000000 0.000000
+    ##                        Oligo Meis2      Astro Macrophage      VLMC       SMC
+    ## AAACAGAGCGACTCCT-1 0.0000000     0 0.00000000 0.00000000 0.0000000 0.0000000
+    ## AAACCGGGTAGGTACC-1 0.0000000     0 0.00000000 0.00000000 0.0000000 0.0000000
+    ## AAACCGTTCGTCCAGG-1 0.1205828     0 0.07998056 0.01847914 0.5404101 0.2114969
+    ## AAACTCGTGATATAAG-1 0.5886043     0 0.00000000 0.00000000 0.0000000 0.0000000
+    ## AAAGGGATGTAGCAAG-1 0.0000000     0 0.00000000 0.00000000 0.0000000 0.0000000
+    ## AAATAACCATACGGGA-1 0.0000000     0 0.00000000 0.00000000 0.0000000 0.0000000
+    ##                          max
+    ## AAACAGAGCGACTCCT-1 1.0000000
+    ## AAACCGGGTAGGTACC-1 0.3179080
+    ## AAACCGTTCGTCCAGG-1 0.5404101
+    ## AAACTCGTGATATAAG-1 0.5886043
+    ## AAAGGGATGTAGCAAG-1 0.5627160
+    ## AAATAACCATACGGGA-1 0.6155166
+
+<https://www.r-graph-gallery.com/2d-density-plot-with-ggplot2.html>
+
+    d <- data.frame(cortex_final[['anterior1']]@coordinates[,c('col','row')])
+    d['row'] <- d['row'] * -1
+    colnames(d) <- c('x','y')
+    dim(d)
+
+    ## [1] 1072    2
+
+    all <- cbind(d,predictions)
+    ggplot(all, aes(x,y,color=Vip)) + 
+      geom_bin2d(bins = 70) +
+      scale_fill_continuous(type = "viridis") +
+      theme_bw()
+
+![](Exploring-Anchor-Based-label-transfer-objects_files/figure-markdown_strict/unnamed-chunk-22-1.png)
+
+    ggplot(all, aes(x,y,color=`L6 CT`)) + 
+      geom_point()  +
+      scale_colour_gradient2()
+
+![](Exploring-Anchor-Based-label-transfer-objects_files/figure-markdown_strict/unnamed-chunk-23-1.png)
+
+    ggplot(all, aes(x,y,color=Vip)) + 
+      geom_point() +
+      scale_colour_gradient2()
+
+![](Exploring-Anchor-Based-label-transfer-objects_files/figure-markdown_strict/unnamed-chunk-24-1.png)
+
+Wonder if kernel density estimation (see "kde2d {MASS}) would be useful
+algorithm for encircling hotspots of clusters?
+
+    ggplot(all, aes(x, y) ) +
+      geom_density_2d()
+
+![](Exploring-Anchor-Based-label-transfer-objects_files/figure-markdown_strict/unnamed-chunk-25-1.png)

@@ -10,22 +10,27 @@ In Seurat (v3.1) spatial vignette, the spatial dataset was matched up to a refer
 An anchor-based integration was used to transfer labels from allen_reference to the spatial data. This took ~3 hours originally, but I saved the _final results from my run of the vignette.
 ```{r}
 library(Seurat)
-allen_reference_final <- readRDS('allen_reference_final.rds') #6GB!
-allen_reference_final[['SCT']] #SCT assay is the normalized data, which was done using the same method, sctransform(), used to normalize the spatial dataset
+#allen_reference_final <- readRDS('../allen_reference_final.rds') #6GB!
+#allen_reference_final[['SCT']] #SCT assay is the normalized data, which was done using the same method, sctransform(), used to normalize the spatial dataset
 ```
 
 The cell type labels for the reference single-cell dataset are saved in the "subclass" column. For 14,249 cells, there are 23 cell types:
 ```{r}
-length(allen_reference_final$subclass)
-table(allen_reference_final$subclass)
+#length(allen_reference_final$subclass)
+#table(allen_reference_final$subclass)
 ```
 
 ## Predicted Cell-Type Compositions
 The `cortex` Seurat object created in the vignette is a subset of the spatial dataset, for clusters 1, 2, 3, 5, 6, & 7 in a specific section of the slide. Assays in the Seurat object include SCT (the normalized data), pca & umap results, and "predictions" from the anchor-based label transfer.
 ```{r}
-cortex_final <- readRDS('cortex_final.rds') #342MB
+cortex_final <- readRDS('../cortex_final.rds') #342MB
+cortex_final
+```
+
+```{r}
 names(cortex_final)
 ```
+
 
 Normalization and preprocessing of the data reduced it to 16,017 genes for 1,072 sample spots (named 'cells' here).
 ```{r}
@@ -63,6 +68,12 @@ table(cortex_final$seurat_clusters)
 ```
 
 ```{r}
+SpatialDimPlot(cortex_final, label = TRUE, label.size = 3)
+#SpatialPlot(cortex_final, label = TRUE, label.size = 3, group.by="seurat_clusters") #identical
+```
+
+
+```{r}
 cl <- 1
 x <- as.data.frame(cortex_final[['predictions']]@data[-24,cortex_final$seurat_clusters==cl])
 x['celltype'] <- rownames(x)
@@ -92,5 +103,79 @@ A markvariogram (similar to Trensceek, model cell type compositions as a mark po
 cortex_final[['predictions']]@meta.features
 ```
 
+## Overlaying Plots onto Tissue Images
+Can use "predictions" assay of cell types to overlay onto tissue image:
+```{r}
+DefaultAssay(cortex_final) <- "predictions"
+SpatialFeaturePlot(cortex_final, features = c("L2/3 IT", "L4"), pt.size.factor = 1.6, ncol = 2, crop = TRUE)
+```
 
+Can set default assay back to the transformed data to plot specific gene expressions overlayed onto the slide image:
+```{r}
+DefaultAssay(cortex_final) <- "SCT"
+SpatialPlot(cortex_final, images='anterior1', features=c("Hpca", "Ttr","Mbp"), ncol=1)
+DefaultAssay(cortex_final) <- "predictions"
+```
+
+Clusters from dimensionality reduction (PCA or UMAP) analysis:
+```{r}
+SpatialPlot(cortex_final, group.by="seurat_clusters")
+```
+
+```{r}
+#SpatialPlot(cortex_final, images='anterior1')
+SpatialDimPlot(cortex_final, cells.highlight = CellsByIdentities(object = cortex_final, idents = c(1,2,3,5,6,7)), facet.highlight = TRUE, ncol = 2)
+```
+
+Image & sample coordinates are saved in the object:
+```{r}
+slotNames(cortex_final[['anterior1']])
+```
+
+```{r}
+head(cortex_final[['anterior1']]@coordinates)
+```
+
+```{r}
+plot(cortex_final[['anterior1']]@coordinates$col,cortex_final[['anterior1']]@coordinates$row * -1) #same rotation as the breast tissue (2016), must be a 10x thing
+#plot(cortex_final[['anterior1']]@coordinates$imagecol, cortex_final[['anterior1']]@coordinates$imagerow * -1) #upscaled coordinates?
+```
+
+
+```{r}
+predictions <- t(as.matrix((cortex_final[['predictions']]@data)))
+dim(predictions)
+head(predictions)
+```
+
+https://www.r-graph-gallery.com/2d-density-plot-with-ggplot2.html
+```{r}
+d <- data.frame(cortex_final[['anterior1']]@coordinates[,c('col','row')])
+d['row'] <- d['row'] * -1
+colnames(d) <- c('x','y')
+dim(d)
+all <- cbind(d,predictions)
+ggplot(all, aes(x,y,color=Vip)) + 
+  geom_bin2d(bins = 70) +
+  scale_fill_continuous(type = "viridis") +
+  theme_bw()
+```
+
+```{r}
+ggplot(all, aes(x,y,color=`L6 CT`)) + 
+  geom_point()  +
+  scale_colour_gradient2()
+```
+
+```{r}
+ggplot(all, aes(x,y,color=Vip)) + 
+  geom_point() +
+  scale_colour_gradient2()
+```
+
+Wonder if kernel density estimation (see "kde2d {MASS}) would be useful algorithm for encircling hotspots of clusters?
+```{r}
+ggplot(all, aes(x, y) ) +
+  geom_density_2d()
+```
 
