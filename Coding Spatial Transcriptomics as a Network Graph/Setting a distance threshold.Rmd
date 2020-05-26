@@ -1,0 +1,122 @@
+---
+title: "Setting a distance threshold for conversion from Spatial Tx into a Network Graph"
+output: md_document
+---
+# Setting a distance threshold for conversion from Spatial Tx into a Network Graph
+May 26th, 2020
+
+```{r, include=FALSE}
+library(Seurat)
+library(tidyr)
+library(ggplot2)
+library(igraph)
+```
+
+
+The spatial data is available publically from 10x Genomics. 1,072 spatially tagged samples for 47,094 genes.
+```{r, include=FALSE}
+cortex_final <- readRDS('../2/cortex_final.rds') #342MB
+```
+```{r}
+cortex_final
+```
+
+
+```{r}
+spatial.data <- data.frame(cortex_final[['anterior1']]@coordinates[,c('col','row')])
+spatial.data['row'] <- spatial.data['row'] * -1 #final row of cell type predictions is a "max" that can be removed
+colnames(spatial.data) <- c('x','y')
+spatial.data <- cbind(spatial.data,t(as.matrix((cortex_final[['predictions']]@data))))
+dim(spatial.data)
+spatial.data[1:10,1:4]
+```
+
+```{r}
+dist.matrix <- as.matrix(dist(data.frame(spatial.data[,1:2])))
+n <- dim(dist.matrix)[1]
+dim(dist.matrix)
+dist.matrix[1:10,1:3]
+```
+
+Median distance is 29.15, mean is 33.58, the minimum distance between two samples is 1.4, while the 2nd percentile distance is 4.0
+```{r}
+dist.matrix.no.diag <- dist.matrix
+for (i in seq(n)) {
+  dist.matrix.no.diag[i,i] <- NA
+}
+summary(as.numeric(dist.matrix.no.diag))
+search.space <- quantile(dist.matrix.no.diag, probs = c(0,.02), na.rm = TRUE)
+search.space
+```
+
+By testing different threholds, we can see that 86% of samples will have four neighbors when using a 1.9 distance threshold, while 79% will have eight neighbors when using a 2.1 distance threshold.
+```{r}
+cutoffs <- seq(search.space[1], search.space[2], length.out = 20) #50 bins between the minimum and the 2nd percentile distances
+getmode <- function(v) {
+   uniqv <- unique(v)
+   max(uniqv[which.max(tabulate(match(v, uniqv)))])
+}
+final.results <- data.frame(threshold=double()
+                            ,median.neighbors=double()
+                            ,mode.neighbors=double()
+                            ,mode.fraction=double()
+                            ,neighborless=integer()
+                            )
+for (threshold in cutoffs){
+  x <- as.numeric(colSums(dist.matrix > 0 & dist.matrix < threshold))
+  median.neighbors <- median(x)
+  mode.neighbors <- getmode(x)
+  mode.fraction <- sum(x==mode.neighbors) / length(x)
+  neighborless <- sum(x==0)
+  final.results <- rbind(final.results,data.frame(threshold,median.neighbors,mode.neighbors,mode.fraction,neighborless))
+}
+final.results[1:20,]
+```
+
+We have a range of thresholds to choose an output network where the majority of nodes have either 4, 8, 12, or 20 neighbors:
+```{r}
+ggplot(final.results, aes(x=threshold, y=mode.fraction, fill=as.factor(mode.neighbors))) + 
+  geom_area() + 
+  scale_x_continuous('threshold',breaks=seq(search.space[1], search.space[2], length.out = 5))
+```
+
+Make a function that uses a distance threshold to create an undirected graph. Can later work on an extension that would weight and/or direct the edges in the output network too.
+```{r}
+make_graph <- function(threshold) {
+   graph_from_adjacency_matrix(as.matrix(dist.matrix > 0 & dist.matrix < threshold), mode="undirected")
+}
+l <- as.matrix(spatial.data[,1:2]) #use layout coordinates from original data
+```
+
+Select a random target sample to plot:
+```{r}
+plot_random_node <- function(threshold,seed=1989) {
+  g <- make_graph(threshold)
+  set.seed(seed)
+  target.sample <- sample(rownames(dist.matrix),1)
+  inc.edges <- incident(g,  V(g)[target.sample], mode="all")
+  ecol <- rep("gray80", ecount(g))
+  ecol[inc.edges] <- "orange"
+  
+  vcol <- rep("grey40", vcount(g)) #color vertices, default is grey40
+  vcol[V(g)==target.sample] <- "gold" #neighbors of target are gold
+  neigh.nodes <- neighbors(g, V(g)[target.sample], mode="out")
+  vcol[neigh.nodes] <- "#ff9d00"
+  #grep("red", colors(), value=T)
+  vcol[sum(V(g)[target.sample])] <- "red2"
+  
+  plot(g, vertex.label=NA, vertex.size=2, layout = l
+       ,vertex.color=vcol, edge.color=ecol) #layout_with_kk is pretty good too
+  title(paste("Neighbors for", target.sample," [distance threshold =",threshold,"]"),cex.main=1,col.main="green")
+}
+```
+
+Here we can see the effect the maxmium neighbor distance threhold has on the final output graph:
+```{r, fig.width = 12, fig.height = 12}
+par(mfrow=c(2,2))
+plot_random_node(1.9)
+plot_random_node(2.1)
+plot_random_node(3.1)
+plot_random_node(3.4)
+```
+
