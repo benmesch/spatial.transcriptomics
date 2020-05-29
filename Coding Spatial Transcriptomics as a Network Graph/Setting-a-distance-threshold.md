@@ -97,6 +97,7 @@ eight neighbors when using a 2.1 distance threshold.
       neighborless <- sum(x==0)
       final.results <- rbind(final.results,data.frame(threshold,median.neighbors,mode.neighbors,mode.fraction,neighborless))
     }
+    rm(cutoffs,x,threshold,median.neighbors,mode.neighbors,mode.fraction,neighborless)
     final.results[1:20,]
 
     ##    threshold median.neighbors mode.neighbors mode.fraction neighborless
@@ -135,14 +136,16 @@ graph. Can later work on an extension that would weight and/or direct
 the edges in the output network too.
 
     make_graph <- function(threshold) {
-       graph_from_adjacency_matrix(as.matrix(dist.matrix > 0 & dist.matrix < threshold), mode="undirected")
+       g <- graph_from_adjacency_matrix(as.matrix(dist.matrix > 0 & dist.matrix < threshold), mode="undirected")
+       graph_attr(g,"threshold") <- threshold
+       graph_attr(g,"layout") <- l
+       g
     }
     l <- as.matrix(spatial.data[,1:2]) #use layout coordinates from original data
 
 Select a random target sample to plot:
 
-    plot_random_node <- function(threshold,seed=1989) {
-      g <- make_graph(threshold)
+    plot_random_node <- function(g, seed=1989) {
       set.seed(seed)
       target.sample <- sample(rownames(dist.matrix),1)
       inc.edges <- incident(g,  V(g)[target.sample], mode="all")
@@ -156,18 +159,18 @@ Select a random target sample to plot:
       #grep("red", colors(), value=T)
       vcol[sum(V(g)[target.sample])] <- "red2"
       
-      plot(g, vertex.label=NA, vertex.size=2, layout = l
+      plot(g, vertex.label=NA, vertex.size=2#, layout = g$layout #setting a "layout" attribute in graph will make it the default
            ,vertex.color=vcol, edge.color=ecol) #layout_with_kk is pretty good too
-      title(paste("Neighbors for", target.sample," [distance threshold =",threshold,"]"),cex.main=1,col.main="green")
+      title(paste("Neighbors for", target.sample," [distance threshold =",g$threshold,"]"),cex.main=1,col.main="green")
     }
 
 Here we can see the effect the maxmium neighbor distance threhold has on
 the final output graph:
 
     par(mfrow=c(2,2))
-    plot_random_node(1.9)
-    plot_random_node(2.1)
-    plot_random_node(3.1)
-    plot_random_node(3.4)
+    plot_random_node(make_graph(1.9))
+    plot_random_node(make_graph(2.1))
+    plot_random_node(make_graph(3.1))
+    plot_random_node(make_graph(3.4))
 
 ![](Setting-a-distance-threshold_files/figure-markdown_strict/unnamed-chunk-11-1.png)
