@@ -1,0 +1,185 @@
+---
+title: "Spatial Tx Graph Weighted by Correlation of Cell Type Compositions"
+output: md_document
+---
+# Spatial Tx Graph Weighted by Correlation of Cell Type Compositions
+
+```{r, include=FALSE}
+library(Seurat)
+library(tidyr)
+library(ggplot2)
+library(igraph)
+```
+
+Graph edges can be weighted, see: https://stackoverflow.com/questions/54232821/how-igraph-handle-weights
+```{r}
+g <- make_ring(10) %>%
+  set_vertex_attr("color", value = "red") %>%
+  set_vertex_attr("label", value = letters[1:10])
+#g
+#V(g)
+#vertex_attr(g)
+E(g)$weight <- seq(1,10,1)
+#E(g)
+#edge_attr(g)
+#strength(g) #total of outgoing weights
+plot(g, edge.width=(E(g)$weight))
+```
+
+
+
+The spatial data to be analyzed is available publically from 10x Genomics. 1,072 spatially tagged samples for 47,094 genes. Retreive data:
+```{r, include=FALSE}
+cortex_final <- readRDS('../2/cortex_final.rds') #342MB
+spatial.data <- data.frame(cortex_final[['anterior1']]@coordinates[,c('col','row')]) #see "exploring anchor based label transfer".md
+spatial.data['row'] <- spatial.data['row'] * -1
+colnames(spatial.data) <- c('x','y')
+spatial.data <- cbind(spatial.data,t(as.matrix((cortex_final[['predictions']]@data))))
+vals <- as.matrix(spatial.data[,-c(1,2)])
+dist.matrix <- as.matrix(dist(data.frame(spatial.data[,1:2]))) #see "setting a distance threshold".md```
+```
+
+Make a function that uses a distance threshold to create an undirected graph. Can later work on an extension that would weight and/or direct the edges in the output network too.
+```{r}
+make_graph <- function(threshold) {
+   g <- graph_from_adjacency_matrix(as.matrix(dist.matrix > 0 & dist.matrix < threshold), mode="undirected")
+   graph_attr(g,"threshold") <- threshold
+   graph_attr(g,"layout") <- as.matrix(spatial.data[,1:2])
+   g
+}
+```
+
+Select a random target sample to plot:
+```{r}
+plot_random_node <- function(g, seed=1989) {
+  set.seed(seed)
+  target.sample <- sample(rownames(dist.matrix),1)
+  inc.edges <- incident(g,  V(g)[target.sample], mode="all")
+  ecol <- rep("gray80", ecount(g))
+  ecol[inc.edges] <- "orange"
+  
+  vcol <- rep("grey40", vcount(g)) #color vertices, default is grey40
+  vcol[V(g)==target.sample] <- "gold" #neighbors of target are gold
+  neigh.nodes <- neighbors(g, V(g)[target.sample], mode="out")
+  vcol[neigh.nodes] <- "#ff9d00"
+  #grep("red", colors(), value=T)
+  vcol[sum(V(g)[target.sample])] <- "red2"
+  
+  plot(g, vertex.label=NA, vertex.size=2#, layout = g$layout #setting a "layout" attribute in graph will make it the default
+       ,vertex.color=vcol, edge.color=ecol, edge.width=3) #layout_with_kk is pretty good too
+  title(paste("Neighbors for", target.sample," [distance threshold =",g$threshold,"]"),cex.main=1,col.main="green")
+}
+```
+
+Make graph by linking nodes within "1.9" distance of one another:
+```{r, fig.width = 6, fig.height = 6}
+g <- make_graph(1.9)
+plot_random_node(g)
+```
+
+Loop over all edges and delete edges where nodes do not have a high correlation:
+https://stackoverflow.com/questions/49834827/louvain-community-detection-in-r-using-igraph-format-of-edges-and-vertices
+```{r}
+apply_correlation_filter <- function(g, cor.cutoff){
+  neighbor.cors <- c()
+  for (i in seq(length(E(g)))){
+    neighbor.cors <- c(neighbor.cors,cor(vals[names(tail_of(g,E(g))[i]),], vals[names(head_of(g,E(g))[i]),]))
+  }
+  neighbor.cors[1:5]
+  length(neighbor.cors)
+  targets <- which(neighbor.cors < cor.cutoff)
+  delete_edges(g, targets)
+}
+
+g7 <- apply_correlation_filter(g, .7)
+g8 <- apply_correlation_filter(g, .8)
+g9 <- apply_correlation_filter(g, .9)
+```
+
+### Note the effect of keeping only edges where neighbor nodes correlate > .7, > .8 and > .9 
+```{r, fig.width = 12, fig.height = 12}
+par(mfrow=c(2,2))
+seed = 11
+plot_random_node(g, seed)
+plot_random_node(g7, seed)
+plot_random_node(g8, seed)
+plot_random_node(g9, seed)
+```
+
+Should try community detection. Can't do cliques (complete connected componets). See: https://kateto.net/networks-r-igraph 
+or https://igraph.org/c/doc/igraph-Community.html
+```{r, fig.width = 12, fig.height = 12}
+ceb <- cluster_edge_betweenness(g9)  #makes 500 communities
+#hist(membership(ceb))
+plot(ceb, g9, vertex.label=NA, vertex.size=2)#, layout = g$layout #setting a "layout" attribute in graph will make it the default
+```
+
+
+
+```{r, fig.width = 12, fig.height = 12}
+clp <- cluster_label_prop(g9)
+plot(clp, g9, vertex.label=NA, vertex.size=2)
+```
+
+```{r, fig.width = 12, fig.height = 12}
+cfg <- cluster_fast_greedy(as.undirected(g9))
+#plot(cfg, g9, vertex.label=NA, vertex.size=2, vertex.col = cut_at(cfg, step=100))
+```
+
+```{r}
+cfg
+length(sizes(cfg)) #499
+sizes(cfg)
+merges(cfg)
+cfg[1]
+cfg[400]
+sapply(cfg,length)
+cut_at(cfg, step=250)
+#igraph_community_to_membership(cfg)
+```
+
+
+from source: https://www.sixhat.net/finding-communities-in-networks-with-r-and-igraph.html
+```{r}
+ 
+# let's see if we have communities here using the 
+# Grivan-Newman algorithm
+# 1st we calculate the edge betweenness, merges, etc...
+ebc <- edge.betweenness.community(g9, directed=F)
+5+5
+# Now we have the merges/splits and we need to calculate the modularity
+# for each merge for this we'll use a function that for each edge
+# removed will create a second graph, check for its membership and use
+# that membership to calculate the modularity
+mods <- sapply(0:ecount(g9), function(i){
+  g2 <- delete.edges(g9, ebc$removed.edges[seq(length=i)])
+  cl <- clusters(g2)$membership
+# March 13, 2014 - compute modularity on the original graph g 
+# (Thank you to Augustin Luna for detecting this typo) and not on the induced one g2. 
+  modularity(g9,cl)
+})
+ 
+# we can now plot all modularities
+plot(mods, pch=20)
+
+ 
+```
+
+```{r}
+ebc$removed.edges
+```
+
+
+```{r, fig.width = 12, fig.height = 12}
+# Now, let's color the nodes according to their membership
+#g2<-delete.edges(g9, ebc$removed.edges[seq(length=which.max(mods)-1)])
+g2<-delete.edges(g9, ebc$removed.edges[seq(length=4)])
+V(g9)$color <- clusters(g2)$membership
+ 
+table(V(g9)$color)
+as.factor(clusters(g2)$membership)
+
+# plot it
+plot(g9, vertex.label=NA, vertex.label=NA, vertex.size=2, vertex.col=as.factor(clusters(g2)$membership))
+```
+
