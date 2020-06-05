@@ -1,0 +1,114 @@
+---
+title: "Plotting Relationship between Physical Distance and Divergence of Cell Type Distribution"
+output: md_document
+---
+# Plotting Relationship between Physical Distance and Divergence of Cell Type Distribution 
+
+```{r, include=FALSE}
+library(Seurat)
+library(tidyr)
+library(ggplot2)
+library(igraph)
+library(FNN) #KL.divergence
+library(philentropy) #JS divergence 'JSD()'
+```
+
+
+The spatial data to be analyzed is available publically from 10x Genomics. 1,072 spatially tagged samples for 47,094 genes. Retreive data:
+```{r, include=FALSE}
+cortex_final <- readRDS('../2/cortex_final.rds') #342MB
+spatial.data <- data.frame(cortex_final[['anterior1']]@coordinates[,c('col','row')]) #see "exploring anchor based label transfer".md
+spatial.data['row'] <- spatial.data['row'] * -1
+colnames(spatial.data) <- c('x','y')
+spatial.data <- cbind(spatial.data,t(as.matrix((cortex_final[['predictions']]@data))))
+vals <- as.matrix(spatial.data[,-c(1,2,26)])
+dist.matrix <- as.matrix(dist(data.frame(spatial.data[,1:2]))) #see "setting a distance threshold".md```
+```
+
+```{r}
+head(spatial.data[1:5,1:3])
+head(dist.matrix[1:5,1:3])
+```
+
+### Using Jensen-Shannon Divergence function from philentropy package
+JS Divergence for 2nd and 3rd samples. https://cran.r-project.org/web/packages/philentropy/vignettes/Information_Theory.html
+```{r}
+suppressMessages(test<-as.numeric(JSD(vals[c(2,3),])))
+test
+```
+
+JS Divergence for identical distributions is zero:
+```{r}
+P <- 1:10
+Q <- 20:29
+JSD(rbind(P,Q))
+```
+
+Calculate Jensen-Shannon Divergence for every pair of samples' predicted cell type distributions:
+```{r}
+n <- nrow(spatial.data)
+results <- matrix(data=NA,nrow=n,ncol=n)
+for (i in seq(n)){
+  for (v in seq(n)){
+    if (!is.na(results[v,i])) {
+      results[i,v] <- results[v,i]
+      next
+    }
+    current <- 0
+    if (i != v) {suppressMessages(current <- as.numeric(JSD(vals[c(i,v),])))}
+    results[i,v] <- current
+  }
+}
+dim(results)
+sum(is.na(results))
+```
+
+```{r}
+plot.single.js.vs.distance <- function(target, color.by.cluster=FALSE){
+  data <- data.frame(cbind(results[-target,target], dist.matrix[-target,target]))
+  colnames(data) <- c("JS.Divergence","Physical.Distance")
+  UMAP_cluster <- if (color.by.cluster) {cortex_final$seurat_clusters[-target]}
+  ggplot(data,aes(x=JS.Divergence,y=Physical.Distance,col=UMAP_cluster)) +
+    ggtitle("Divergence vs. Distance",subtitle=paste("Sample",target,"out of",nrow(results))) +
+           geom_point(shape=19, alpha=1/4
+                      ,position=position_jitter(width=.01,height=.01)
+                      )
+}
+```
+
+Plot JSD vs. phsyical distance for the first sample:
+```{r}
+plot.single.js.vs.distance(1)
+```
+
+```{r}
+plot.single.js.vs.distance(123)
+plot.single.js.vs.distance(450)
+plot.single.js.vs.distance(450, color.by.cluster=TRUE)
+```
+
+```{r}
+rws <- seq(nrow(results))
+jsd.vs.dist <- cbind(results[rws>1,1], dist.matrix[rws>1,1])
+typeof(jsd.vs.dist)
+dim(jsd.vs.dist)
+colnames(jsd.vs.dist) <- c("JS.Divergence","Physical.Distance")
+colnames(jsd.vs.dist)
+for (i in seq(2:nrow(results)-1)){
+  #print (dim(cbind(results[rws>i,i], dist.matrix[rws>i,i])))
+  jsd.vs.dist <- rbind(jsd.vs.dist,cbind(results[rws>i,i], dist.matrix[rws>i,i]))
+}
+typeof(jsd.vs.dist)
+dim(jsd.vs.dist)
+jsd.vs.dist <- data.frame(jsd.vs.dist)
+
+```
+
+```{r, fig.width = 12, fig.height = 12}
+ggplot(data=jsd.vs.dist,aes(x=JS.Divergence, y=Physical.Distance)) +
+           geom_point(shape=19, alpha=.01, size=.5
+                      ,position=position_jitter(width=.01,height=.01)
+                      )
+```
+
+
