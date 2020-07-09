@@ -15,7 +15,7 @@ library(philentropy) #JS divergence 'JSD()'
 
 The spatial data to be analyzed is available publically from 10x Genomics. 1,072 spatially tagged samples for 47,094 genes. Retreive data:
 ```{r, include=FALSE}
-cortex_final <- readRDS('cortex_final.rds') #342MB
+cortex_final <- readRDS('../cortex_final.rds') #342MB
 spatial.data.frame <- data.frame(cortex_final[['anterior1']]@coordinates[,c('col','row')]) #see "exploring anchor based label transfer".md
 spatial.data.frame['row'] <- spatial.data.frame['row'] * -1
 colnames(spatial.data.frame) <- c('x','y')
@@ -196,4 +196,53 @@ Seems like there are 2 large bands of samples that have very siimlar (high JSD) 
 I wonder how the cell type distributions look for the samples in between the two major bands are like??
 
 There are some other samples that have one or two  or three closely identical peers, but are physical separated. Again, what is the dist like for those samples in between? (Some of those could be noise or due ot random chance, that the compositions are so similar, but some may really represent dispersed subtissue types(?).) 
+
+
+### Community detection, July 8th
+https://kateto.net/netscix2016.html
+https://www.analyticsvidhya.com/blog/2020/04/community-detection-graphs-networks/
+https://medium.com/walmartlabs/demystifying-louvains-algorithm-and-its-implementation-in-gpu-9a07cdd3b010ujh yb7
+
+
+https://www.r-bloggers.com/community-detection-with-louvain-and-infomap/
+```{r}
+lc <- cluster_louvain(g)
+membership(lc)[1:5]
+communities(lc)[1:5]
+test <- communities(lc)
+test2 <- lapply(test,length)
+test2[1:5]
+as.numeric(test2)[1:5]
+which(test2>1)
+```
+
+https://stackoverflow.com/questions/51271730/how-to-remove-small-communities-using-igraph-in-r/55752126
+```{r, fig.width = 12, fig.height = 12}
+Small = which(table(lc$membership) < 5)
+Keep = V(g)[!(lc$membership %in% Small)] # Which nodes should be kept?
+## Get subgraph & plot
+g2  = induced_subgraph(g, Keep)
+lou2 = cluster_louvain(g2)
+LO2 = layout.for.igraph[Keep,]
+plot(lou2, g2, vertex.label = NA, vertex.size=1, 
+    edge.arrow.size = .2, layout=LO2)
+```
+
+Would running Louvain be better using the full set of weighted edges (not just thresholding and keeping high JSD edges)?
+
+```{r, fig.width = 12, fig.height = 12}
+plot(lc, g, vertex.label=NA, vertex.size=1
+     , layout = layout.for.igraph)
+```
+
+
+
+
+```{r}
+#test <- cliques(g) # list of cliques       
+
+#sapply(cliques(net.sym), length) # clique sizes
+
+#largest_cliques(net.sym) # cliques with max number of nodes
+```
 
