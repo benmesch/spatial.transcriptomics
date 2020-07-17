@@ -1,0 +1,144 @@
+---
+title: "R Notebook"
+output: md_document
+---
+
+ 
+```{r, include=FALSE}
+library(Seurat)
+library(tidyr)
+library(ggplot2)
+library(igraph)
+library(FNN) #KL.divergence
+library(philentropy) #JS divergence 'JSD()'
+```
+
+The spatial data to be analyzed is available publicly from 10x Genomics. 1,072 spatially tagged samples for 47,094 genes. Used Seurat anchor-based algorithm to label each sample spot with composition of 23 different cell types:
+```{r, include=FALSE}
+cortex_final <- readRDS('cortex_final.rds') #342MB
+spatial.data.frame <- data.frame(cortex_final[['anterior1']]@coordinates[,c('col','row')]) #see "exploring anchor based label transfer".md
+spatial.data.frame['row'] <- spatial.data.frame['row'] * -1
+colnames(spatial.data.frame) <- c('x','y')
+spatial.data.frame <- cbind(spatial.data.frame,t(as.matrix((cortex_final[['predictions']]@data))))
+expression.vals <- as.matrix(spatial.data.frame[,-c(1,2,26)])
+distance.matrix <- as.matrix(dist(data.frame(spatial.data.frame[,1:2]))) #see "setting a distance threshold".md
+distance.ranks <- apply(ifelse(distance.matrix==0, NA, distance.matrix),1,sort.list) #Rank samples on proximity to one another. Do not count if distance=0 (the diagonal of the distance matrix)
+head(spatial.data.frame)
+```
+
+Save X-Y coordinates for plotting network graphs in the same shape as the original slide:
+```{r}
+layout.for.igraph <- as.matrix(spatial.data.frame[,1:2]) 
+set_default_igraph_attr <- function(g,max.out.degree=NA){
+  graph_attr(g,"layout") <- layout.for.igraph
+  vertex_attr(g,"size") <- 1 #set here, instead of passing in "vertex.size=1" to plot(g)
+  vertex_attr(g,"label") <- NA 
+  edge_attr(g,"color") <- adjustcolor("SkyBlue2", alpha.f=1)
+  if (is.weighted(g)){
+    edge_attr(g, "width") <- E(g)$weight*5
+  }
+  if (!is.na(max.out.degree)){
+    graph_attr(g,"max.out.degree") <- max.out.degree
+  }
+  set_default_igraph_attr <- g
+}
+```
+
+Calculate Jensen-Shannon Divergence for every pair of samples' predicted cell type distributions:
+```{r}
+n <- nrow(spatial.data.frame)
+jsd.matrix <- matrix(data=NA,nrow=n,ncol=n)
+for (i in seq(n)){
+  for (v in seq(n)){
+    if (!is.na(jsd.matrix[v,i])) {
+      jsd.matrix[i,v] <- jsd.matrix[v,i]
+      next
+    }
+    current <- 0
+    if (i != v) {suppressMessages(current <- as.numeric(JSD(expression.vals[c(i,v),])))}
+    jsd.matrix[i,v] <- current
+  }
+}
+rm(i,v,current)
+dim(jsd.matrix)
+```
+
+New July 16: use distance.ranks to create network graph, instead of setting a distance threshold. Build edgelist of closest N neighbors for each node.
+```{r}
+make_graph_of_closest_neighbors <- function(out.degree) {
+  #out.degree = max number of edges for each node 
+  temp <- distance.ranks[1:out.degree,]
+  results <- vector('numeric')
+  for (i in seq(n)){
+    #print (paste("i",i))
+    x <- temp[, i]
+    #print (x)
+    for (v in x){
+      #print (paste(".v",v))
+      #print (temp[,v])
+      if (i %in% temp[, v]){
+        #print (paste('yes',i,v))
+        results <- c(results,i,v)}
+    }
+  }
+  results <- matrix(results, ncol=2, byrow=TRUE) #build an edge list
+  results <- unique(t(apply(results,1,sort))) #after sorting cols 1 & 2, can prevent duplicate rows
+  g <- graph_from_edgelist(results, directed=FALSE)
+  g <- set_default_igraph_attr(g,out.degree=out.degree)
+  make_graph_of_closest_neighbors <- g
+}
+```
+
+## Use new function to create networks of closest 4, 6, 8, 12 neighbors:
+```{r}
+g4 <- make_graph_of_closest_neighbors(4)
+g6 <- make_graph_of_closest_neighbors(6)
+g8 <- make_graph_of_closest_neighbors(8)
+g12 <- make_graph_of_closest_neighbors(12)
+summary(g4,graph.attributes=TRUE)
+summary(g8,graph.attributes=TRUE)
+```
+
+```{r, fig.width = 9, fig.height = 9}
+plot(g4)
+plot(g8)
+```
+## Use JSD to create weighted networks
+Weight the networks using 1 - JSD. (JSD=0 for perfectly identical cell type distributions).
+```{r}
+make_graph_weighted_with_JSD <- function(base_graph){
+  #starting with base_graph, weight edges with the Jensen Shannon Divergence of the 2 nodes attached by the edge
+  g <- as_adjacency_matrix(base_graph,type="both",sparse=FALSE) > 0 #create adjacency matrix, TRUE or . (null)
+  #jsd=0 for identical dist. so use 1 minus JSD and ignore JSD=1 (total dissimilarity)
+  g <- ifelse(g & 1-jsd.matrix>0, 1-jsd.matrix, 0) 
+  g <- graph_from_adjacency_matrix(g, mode="undirected",weighted=TRUE)
+  g <- set_default_igraph_attr(g)
+}
+```
+
+```{r, fig.width = 9, fig.height = 9}
+g4.weighted <- make_graph_weighted_with_JSD(g4)
+g6.weighted <- make_graph_weighted_with_JSD(g6)
+g8.weighted <- make_graph_weighted_with_JSD(g8)
+g12.weighted <- make_graph_weighted_with_JSD(g12)
+plot(g4.weighted)
+plot(g8.weighted)
+```
+
+
+
+
+# Create random graphs, to assess frequency of getting communities of similar size
+
+```{r}
+deg <- 4
+null.g <- sample_degseq(rep(deg,n), method = "simple.no.multiple")
+plot(null.g)
+```
+
+```{r}
+V(g4)[1072]
+V(g)[4]
+as.numeric(neighbors(g,4)) #neighbors of node 4
+```
+
