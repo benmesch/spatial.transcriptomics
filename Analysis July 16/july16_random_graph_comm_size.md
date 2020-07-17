@@ -6,6 +6,42 @@ The spatial data to be analyzed is available publicly from 10x Genomics.
 anchor-based algorithm to label each sample spot with composition of 23
 different cell types:
 
+    ##                      x   y          Vip        Lamp5       Sst         Sncg
+    ## AAACAGAGCGACTCCT-1  94 -14 0.000000e+00 0.000000e+00 0.0000000 0.000000e+00
+    ## AAACCGGGTAGGTACC-1  28 -42 3.129354e-02 0.000000e+00 0.2121399 0.000000e+00
+    ## AAACCGTTCGTCCAGG-1  42 -52 1.937322e-05 1.452998e-05 0.0000000 5.811775e-05
+    ## AAACTCGTGATATAAG-1 113 -23 0.000000e+00 0.000000e+00 0.0000000 0.000000e+00
+    ## AAAGGGATGTAGCAAG-1  62 -24 1.519495e-01 2.589553e-03 0.2130934 0.000000e+00
+    ## AAATAACCATACGGGA-1  88 -14 3.022401e-01 8.213392e-02 0.0000000 1.093476e-04
+    ##                    Serpinf1       Pvalb       Endo Peri      L6 CT       L6b
+    ## AAACAGAGCGACTCCT-1        0 0.000000000 0.00000000    0 0.00000000 0.0000000
+    ## AAACCGGGTAGGTACC-1        0 0.008067108 0.00000000    0 0.00000000 0.0000000
+    ## AAACCGTTCGTCCAGG-1        0 0.000000000 0.02895847    0 0.00000000 0.0000000
+    ## AAACTCGTGATATAAG-1        0 0.000000000 0.00000000    0 0.01954665 0.3814934
+    ## AAAGGGATGTAGCAAG-1        0 0.015878955 0.00000000    0 0.00000000 0.0000000
+    ## AAATAACCATACGGGA-1        0 0.000000000 0.00000000    0 0.00000000 0.0000000
+    ##                    L6 IT   L2/3 IT CR     L5 PT         NP         L4    L5 IT
+    ## AAACAGAGCGACTCCT-1     0 1.0000000  0 0.0000000 0.00000000 0.00000000 0.000000
+    ## AAACCGGGTAGGTACC-1     0 0.3179080  0 0.1659479 0.00000000 0.26464364 0.000000
+    ## AAACCGTTCGTCCAGG-1     0 0.0000000  0 0.0000000 0.00000000 0.00000000 0.000000
+    ## AAACTCGTGATATAAG-1     0 0.0000000  0 0.0000000 0.01035563 0.00000000 0.000000
+    ## AAAGGGATGTAGCAAG-1     0 0.0000000  0 0.0000000 0.00000000 0.05377252 0.562716
+    ## AAATAACCATACGGGA-1     0 0.6155166  0 0.0000000 0.00000000 0.00000000 0.000000
+    ##                        Oligo Meis2      Astro Macrophage      VLMC       SMC
+    ## AAACAGAGCGACTCCT-1 0.0000000     0 0.00000000 0.00000000 0.0000000 0.0000000
+    ## AAACCGGGTAGGTACC-1 0.0000000     0 0.00000000 0.00000000 0.0000000 0.0000000
+    ## AAACCGTTCGTCCAGG-1 0.1205828     0 0.07998056 0.01847914 0.5404101 0.2114969
+    ## AAACTCGTGATATAAG-1 0.5886043     0 0.00000000 0.00000000 0.0000000 0.0000000
+    ## AAAGGGATGTAGCAAG-1 0.0000000     0 0.00000000 0.00000000 0.0000000 0.0000000
+    ## AAATAACCATACGGGA-1 0.0000000     0 0.00000000 0.00000000 0.0000000 0.0000000
+    ##                          max
+    ## AAACAGAGCGACTCCT-1 1.0000000
+    ## AAACCGGGTAGGTACC-1 0.3179080
+    ## AAACCGTTCGTCCAGG-1 0.5404101
+    ## AAACTCGTGATATAAG-1 0.5886043
+    ## AAAGGGATGTAGCAAG-1 0.5627160
+    ## AAATAACCATACGGGA-1 0.6155166
+
 Plot original stained tissue image and UMAP clusters.
 
     SpatialDimPlot(cortex_final, crop = FALSE, pt.size.factor = 0, label.size = 3)
@@ -99,13 +135,13 @@ Use new function to create networks of closest 4, 6, 8, 12 neighbors:
     g12 <- make_graph_of_closest_neighbors(12)
     summary(g04,graph.attributes=TRUE)
 
-    ## IGRAPH 9ba4c69 U--- 1072 2064 -- 
+    ## IGRAPH a436fbc U--- 1072 2064 -- 
     ## + attr: layout (g/n), max.out.degree (g/n), main (g/c), size (v/n),
     ## | label (v/l), color (e/c)
 
     summary(g08,graph.attributes=TRUE)
 
-    ## IGRAPH 9c25ddf U--- 1072 4060 -- 
+    ## IGRAPH a4a774a U--- 1072 4060 -- 
     ## + attr: layout (g/n), max.out.degree (g/n), main (g/c), size (v/n),
     ## | label (v/l), color (e/c)
 
@@ -116,8 +152,12 @@ Use new function to create networks of closest 4, 6, 8, 12 neighbors:
     plot(g08) 
 
 ![](july16_random_graph_comm_size_files/figure-markdown_strict/unnamed-chunk-8-2.png)
-\#\# Use JSD to create weighted networks Weight the networks using 1 -
-JSD. (JSD=0 for perfectly identical cell type distributions).
+
+Use JSD to create weighted networks
+-----------------------------------
+
+Weight the networks using 1 - JSD. (JSD=0 for perfectly identical cell
+type distributions).
 
     make_graph_weighted_with_JSD <- function(base_graph){
       #starting with base_graph, weight edges with the Jensen Shannon Divergence of the 2 nodes attached by the edge
@@ -139,13 +179,23 @@ JSD. (JSD=0 for perfectly identical cell type distributions).
     plot(g08.weighted)
 
 ![](july16_random_graph_comm_size_files/figure-markdown_strict/unnamed-chunk-10-2.png)
-\#\# Apply Louvain Community detection
+
+Apply Louvain Community detection
+---------------------------------
 
 Color By Dominant Cell Type for Each Community
 ----------------------------------------------
 
-    plot_communities_by_dominant_cell_type <- function(basegraph, communities.object=NA, expr=expression.vals){
-      if (is.na(communities.object)) {communities.object <- cluster_louvain(basegraph)}
+    plot_communities_by_dominant_cell_type <- function(basegraph, communities.algo=NA
+                                                       , print.table=FALSE, expr=expression.vals){
+      #communities.algo is a string: cluster_louvain, cluster_infomap
+      communities.object <- NA
+      if (is.na(communities.algo) | communities.algo=="cluster_louvain") {
+        communities.object <- cluster_louvain(basegraph)
+      }else if (communities.algo=="cluster_infomap"){
+        communities.object <- cluster_infomap(basegraph)
+      }
+      if (is.na(communities.object)) {break}
       comm.top.celltypes <- lapply(communities(communities.object),function(z){
         x <- colMeans(expr[z,])
         x <- x[sort.list(x,decreasing = TRUE)]
@@ -161,127 +211,65 @@ Color By Dominant Cell Type for Each Community
       comm.labels <- sapply(comm.top.celltypes, function(x){paste(names(x),sprintf(x,fmt = '[%#.2f]'),collapse="; ")})
       names(comm.labels) <- paste("Community #",names(comm.labels),sep="")
       #comm.highest.val <- sapply(comm.top.celltypes, function(x){x[1]},USE.NAMES = FALSE)
-      print (paste("Highest Cell Types per Community,",graph_attr(basegraph,"main")))
-      print (comm.labels)
-
-      #!!!need to use a global to set palette and ensure it is large enough to handle 23 cell types 
-      pal <- categorical_pal(length(unique(comm.highest.label)))
-      plot(basegraph, mark.groups=communities.object, mark.expand = 2, edge.width=0.2 
+      if (print.table) {
+        print ("")
+        print (paste("Highest Cell Types per Community,",graph_attr(basegraph,"main")))
+        print (comm.labels)
+      }
+      #take care here to use a global to set palette and ensure it is large enough to handle 23 cell types:
+      #by using global palette, cell types will retain same color on different plots
+      #set alpha to < 1.0, so that community overlaps can be seen
+      global.pal <- topo.colors(length(unique(colnames(expression.vals))),alpha=.2)
+      names(global.pal) <- colnames(expression.vals)
+      local.pal <- global.pal[as.character(unique(comm.highest.label))] #unique colorset used for this instance 
+      comm.pal <- local.pal[as.character(comm.highest.label)] #colors used by each community
+      plot(basegraph
+           #, sub="asdfasdf"
+           ,mark.groups=communities.object, mark.expand = 2, edge.width=0.2 
            ,edge.color="lightgrey"
-           ,mark.col = pal[as.numeric(comm.highest.label)]
+           ,mark.col=comm.pal
            ,mark.border="black")
       legend("bottomright",inset=.02,title="Dominant cell type"
-             ,fill = pal[unique(as.numeric(comm.highest.label))]
-             ,legend=unique(comm.highest.label))
+             ,fill=local.pal
+             ,legend=names(local.pal) 
+             )
     }
 
-    plot_communities_by_dominant_cell_type(g04.weighted)
+    plot_communities_by_dominant_cell_type(g04.weighted, "cluster_louvain", print.table=FALSE)
 
-    ## [1] "Highest Cell Types per Community, Nodes connected to nearest 4 neighbors , weighted with JSD"
-    ##                             Community #1 
-    ##                           "L6 CT [0.30]" 
-    ##                             Community #2 
-    ##               "Sst [0.27]; L5 IT [0.17]" 
-    ##                             Community #3 
-    ##                           "Oligo [0.93]" 
-    ##                             Community #4 
-    ##                           "Oligo [1.00]" 
-    ##                             Community #5 
-    ##                           "L6 CT [0.32]" 
-    ##                             Community #6 
-    ##                           "L5 IT [0.34]" 
-    ##                             Community #7 
-    ##                           "L5 IT [0.56]" 
-    ##                             Community #8 
-    ##                           "Oligo [0.99]" 
-    ##                             Community #9 
-    ##                           "L6 CT [0.33]" 
-    ##                            Community #10 
-    ##               "Vip [0.12]; Meis2 [0.12]" 
-    ##                            Community #11 
-    ##                           "L6 CT [0.36]" 
-    ##                            Community #12 
-    ##                         "L2/3 IT [0.63]" 
-    ##                            Community #13 
-    ## "L2/3 IT [0.20]; Vip [0.16]; Sst [0.16]" 
-    ##                            Community #14 
-    ##                         "L2/3 IT [0.37]" 
-    ##                            Community #15 
-    ##                           "L5 IT [0.40]" 
-    ##                            Community #16 
-    ##                           "L6 IT [0.40]" 
-    ##                            Community #17 
-    ##                           "L6 CT [0.26]" 
-    ##                            Community #18 
-    ##                         "L2/3 IT [0.57]" 
-    ##                            Community #19 
-    ##                         "L2/3 IT [0.34]" 
-    ##                            Community #20 
-    ##                         "L2/3 IT [0.34]" 
-    ##                            Community #21 
-    ##                           "Astro [0.53]" 
-    ##                            Community #22 
-    ##                           "Oligo [0.92]" 
-    ##                            Community #23 
-    ##              "L2/3 IT [0.26]; L4 [0.25]" 
-    ##                            Community #24 
-    ##                           "Astro [0.81]" 
-    ##                            Community #25 
-    ##               "L6 IT [0.30]; Sst [0.25]"
+    ## Warning in if (is.na(communities.object)) {: the condition has length > 1 and
+    ## only the first element will be used
 
 ![](july16_random_graph_comm_size_files/figure-markdown_strict/unnamed-chunk-13-1.png)
 
-**^Need to set a palette of 23 colors (\# of cell types) globally. Then
-every cell type is converted to an integer (and that integer is used to
-lookup from the global palette).**
+    plot_communities_by_dominant_cell_type(g04.weighted, "cluster_infomap", print.table=FALSE)
 
-**^^Also need to make sure communities are opacity / alpha low, so
-overlapping communities can be seen**
+    ## Warning in if (is.na(communities.object)) {: the condition has length > 1 and
+    ## only the first element will be used
 
-    plot_communities_by_dominant_cell_type(g08.weighted)
+![](july16_random_graph_comm_size_files/figure-markdown_strict/unnamed-chunk-13-2.png)
+**^Why is the subtitle still not working? Should print what community
+detection algo was used, and meta measures like Modularity**
 
-    ## [1] "Highest Cell Types per Community, Nodes connected to nearest 8 neighbors , weighted with JSD"
-    ##                                        Community #1 
-    ##                         "L2/3 IT [0.27]; L4 [0.27]" 
-    ##                                        Community #2 
-    ##                                        "Sst [0.25]" 
-    ##                                        Community #3 
-    ##                                      "Oligo [0.96]" 
-    ##                                        Community #4 
-    ##                        "L6 CT [0.25]; L5 IT [0.24]" 
-    ##                                        Community #5 
-    ##                                      "L6 IT [0.42]" 
-    ##                                        Community #6 
-    ##                                    "L2/3 IT [0.38]" 
-    ##                                        Community #7 
-    ##                                      "Oligo [0.96]" 
-    ##                                        Community #8 
-    ##                                      "L6 CT [0.35]" 
-    ##                                        Community #9 
-    ##                                      "Oligo [0.89]" 
-    ##                                       Community #10 
-    ##                                      "L5 IT [0.43]" 
-    ##                                       Community #11 
-    ##                           "L6 CT [0.26]; NP [0.18]" 
-    ##                                       Community #12 
-    ## "SMC [0.21]; Vip [0.18]; VLMC [0.17]; Meis2 [0.15]" 
-    ##                                       Community #13 
-    ##                                    "L2/3 IT [0.52]" 
-    ##                                       Community #14 
-    ##                                    "L2/3 IT [0.29]" 
-    ##                                       Community #15 
-    ##                                      "L5 IT [0.30]" 
-    ##                                       Community #16 
-    ##                                    "L2/3 IT [0.48]"
+    plot_communities_by_dominant_cell_type(g08.weighted, "cluster_louvain")
+
+    ## Warning in if (is.na(communities.object)) {: the condition has length > 1 and
+    ## only the first element will be used
 
 ![](july16_random_graph_comm_size_files/figure-markdown_strict/unnamed-chunk-14-1.png)
 
-Characterize the communities of the g4 network.
------------------------------------------------
+    plot_communities_by_dominant_cell_type(g08.weighted, "cluster_infomap")
 
-Explore communities igraph objects:
+    ## Warning in if (is.na(communities.object)) {: the condition has length > 1 and
+    ## only the first element will be used
 
-Create functions for exploring specific communities:
+![](july16_random_graph_comm_size_files/figure-markdown_strict/unnamed-chunk-14-2.png)
+
+Characterize a specific community
+---------------------------------
+
+Create functions for exploring specific communities: **Broken: wont
+print x axis if only one cell type in boxplot**
 
     plot_community_location <- function(basegraph,communities.object,community.i){
       #plot a single community: 
@@ -352,22 +340,65 @@ distributions:
 Create random graphs, to assess frequency of getting communities of similar size
 ================================================================================
 
+Can see if getting large community membership size is probable. Will use
+both Modularity and mean community size as the measure (high modularity
+is interpreted as dense intra community connections and sparse inter
+community connections).
+
     deg <- 4
+    B <- 10000
+
+    simulation.results <- t(replicate(B,{
     null.g <- sample_degseq(rep(deg,n), method = "simple.no.multiple")
-    plot(null.g)
+    null.g <- set_default_igraph_attr(null.g)
+    null.cl <- cluster_louvain(null.g)
+    c(modularity(null.cl),mean(membership(null.cl)))
+    }))
+    colnames(simulation.results) <- c("modularity","mean community size")
 
-![](july16_random_graph_comm_size_files/figure-markdown_strict/unnamed-chunk-19-1.png)
+Repeated 1,000 times, modularity for random 4-degree networks is no
+where close to what is observed in the tissue:
 
-    V(g04.weighted)[1072]
+    boxplot(simulation.results[,1], ylim=c(.5,1)
+            , main = paste("Modularity:",B,"simulations vs. Observed (red)")
+            , sub = get.graph.attribute(g04.weighted,"main"))
+    points(modularity(lc04),col="red",pch=19)
 
-    ## + 1/1072 vertex, from 9d02abc:
-    ## [1] 1072
+![](july16_random_graph_comm_size_files/figure-markdown_strict/unnamed-chunk-20-1.png)
 
-    V(g04.weighted)[4]
+After 1,000 runs, very rare for mean community size to reach what is
+observed in the actual Louvain(4) network.
 
-    ## + 1/1072 vertex, from 9d02abc:
-    ## [1] 4
+    boxplot(simulation.results[,2]
+            , main = paste("Mean community size:",B,"simulations vs. Observed (red)")
+            , sub = get.graph.attribute(g04.weighted,"main"))
+    points(mean(membership(lc04)),col="red",pch=19)
 
-    as.numeric(neighbors(g04.weighted,4)) #neighbors of node 4
+![](july16_random_graph_comm_size_files/figure-markdown_strict/unnamed-chunk-21-1.png)
 
-    ## [1]  870  984  998 1013
+### Later
+
+-   Interactive Shiny app - use sliders to adjust number of nearest
+    neighbor edges, and to “blob” together communities, \* Use radio
+    buttons to select which community detection algo to use.
+-   Hover over community to see its name and a chart with aggregate cell
+    type distribution of that community
+-   Apply algorithm to slide-seq data, and another 10x dataset (need to
+    find anchoring reference though)
+
+Community Annotations:
+======================
+
+When “blobbing” together communities, may need to draw polygons
+individually, instead of relying on plot(). Or would be nice to label
+communities with their dominant cell type.
+<a href="https://stackoverflow.com/questions/47971179/igrph-adding-text-to-community-plot" class="uri">https://stackoverflow.com/questions/47971179/igrph-adding-text-to-community-plot</a>
+
+    for (g in seq_along(mark.groups)) {
+    v <- V(graph)[mark.groups[[g]]]
+    igraph.polygon(layout[v, , drop = FALSE], vertex.size = vs, 
+                   expand.by = mark.expand[g]/200, shape = mark.shape[g], 
+                   col = mark.col[g], border = mark.border[g])
+
+Manually adding text:
+`text(c(-1.15, 0.8, 0.9), c(0.35, -0.7, 0.8), c("A", "B", "C"))`
