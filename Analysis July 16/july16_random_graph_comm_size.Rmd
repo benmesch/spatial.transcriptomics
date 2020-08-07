@@ -27,6 +27,13 @@ distance.matrix <- apply(ifelse(distance.matrix==0, NA, distance.matrix),1,sort.
 head(spatial.data.frame)
 ```
 
+```{r}
+saveRDS(cortex_final@assays$SCT@data@Dimnames[1][[1]], file="gene.list.rds")
+saveRDS(cortex_final@assays$SCT@data, file="SCT.dgCMatrix.rds")
+saveRDS(as.matrix(cortex_final@assays$SCT@data), file="SCT.rds")
+```
+
+
 Plot original stained tissue image and UMAP clusters.
 ```{r}
 SpatialDimPlot(cortex_final, crop = FALSE, pt.size.factor = 0, label.size = 3)
@@ -337,17 +344,9 @@ boxplot(simulation.results[,2]
 points(mean(membership(lc04)),col="red",pch=19)
 ```
 
-# EnichmentAnalysis 
 
-```{r}
-x <- c(4,6,8,10,12,15,20,30,40)
-test <- sapply(x,function(x){modularity(cluster_louvain(make_graph_of_closest_neighbors(x)))})
-test
-lc04 <- cluster_louvain(make_graph_of_closest_neighbors(x))
-```
-
-
-# Enrichment analysis of samples at border regions
+# Save list of nodes denoted as border regions for later enrichment analysis
+August 5th.
 ```{r}
 comm.g08 <- cluster_louvain(g08.weighted) 
 #comm.g08 #16 groups, modularity 0.84
