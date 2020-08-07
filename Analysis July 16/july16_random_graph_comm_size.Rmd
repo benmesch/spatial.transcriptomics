@@ -209,13 +209,11 @@ plot_communities_by_dominant_cell_type <- function(basegraph, communities.algo=N
 ```{r, fig.width = 7, fig.height = 7}
 plot_communities_by_dominant_cell_type(g04.weighted, "cluster_louvain", print.table=FALSE)
 plot_communities_by_dominant_cell_type(g04.weighted, "cluster_infomap", print.table=FALSE)
+
+plot_communities_by_dominant_cell_type(g08.weighted, "cluster_louvain", print.table=FALSE)
+plot_communities_by_dominant_cell_type(g08.weighted, "cluster_infomap", print.table=FALSE)
 ```
 **^Why is the subtitle still not working? Should print what community detection algo was used, and meta measures like Modularity**
-
-```{r, fig.width = 7, fig.height = 7}
-plot_communities_by_dominant_cell_type(g08.weighted, "cluster_louvain")
-plot_communities_by_dominant_cell_type(g08.weighted, "cluster_infomap")
-```
 
 ## Characterize a specific community
 ```{r, include=FALSE}
@@ -339,11 +337,217 @@ boxplot(simulation.results[,2]
 points(mean(membership(lc04)),col="red",pch=19)
 ```
 
+# EnichmentAnalysis 
+
+```{r}
+x <- c(4,6,8,10,12,15,20,30,40)
+test <- sapply(x,function(x){modularity(cluster_louvain(make_graph_of_closest_neighbors(x)))})
+test
+lc04 <- cluster_louvain(make_graph_of_closest_neighbors(x))
+```
+
+
+# Enrichment analysis of samples at border regions
+```{r}
+comm.g08 <- cluster_louvain(g08.weighted) 
+#comm.g08 #16 groups, modularity 0.84
+#typeof(communities(comm.g08)) #list
+comm.top.celltypes <- lapply(communities(comm.g08),function(z){
+  x <- colMeans(expression.vals[z,])
+  x <- x[sort.list(x,decreasing = TRUE)]
+  if (length(which(x>.3))>0){
+    x[which(x>.3)]
+  } else if (length(which(x>.15))>0){
+    x[which(x>.15)]
+  } else {
+    x[1:2]
+  }
+})
+#comm.top.celltypes
+comm.highest.label <- as.factor(sapply(comm.top.celltypes, function(x){names(x)[1]}))
+comm.labels <- sapply(comm.top.celltypes, function(x){paste(names(x),sprintf(x,fmt = '[%#.2f]'),collapse="; ")})
+names(comm.labels) <- paste("Community #",names(comm.labels),sep="")
+#comm.highest.label #length 16, factor.
+#comm.labels 
+``` 
+
+```{r}
+border.edges <- crossing(comm.g08, g08.weighted)
+border.crossings <- ends(g08.weighted, E(g08.weighted)[border.edges]) #647
+length(border.edges) #4019 (total number of edges)
+sum(border.edges) #647 edges that connect different communities
+dim(border.crossings) #647 by 2
+border.crossings[1:5,] #
+```
+
+```{r}
+#length(membership(comm.g08))
+#table(membership(comm.g08))
+
+comm.highest.label
+membership(comm.g08)[1:5] #1, 14, 12, 9, 15
+table(membership(comm.g08))
+```
+
+```{r}
+memb <- comm.highest.label[membership(comm.g08)] #for all 1072 spots, list dominant cell type for that spots community
+table(memb)
+```
+
+```{r}
+edge.connects.different.dominant.celltypes <- memb[border.crossings[,1]] != memb[border.crossings[,2]]
+length(edge.connects.different.dominant.celltypes)
+sum(edge.connects.different.dominant.celltypes) #561 are true borders
+true.crossings <- border.crossings[edge.connects.different.dominant.celltypes,]
+border.nodes <- unique(c(true.crossings[,1],true.crossings[,2]))
+dim(true.crossings)
+length(border.nodes) #461 nodes to analyze.
+sum(V(g08.weighted) %in% border.nodes)
+```
+
+
+```{r, fig.width = 7, fig.height = 7}
+
+#function(basegraph, print.table=FALSE, expr=expression.vals){
+communities.object <- comm.g08
+
+#take care here to use a global to set palette and ensure it is large enough to handle 23 cell types:
+#by using global palette, cell types will retain same color on different plots
+#set alpha to < 1.0, so that community overlaps can be seen
+global.pal <- topo.colors(length(unique(colnames(expression.vals))),alpha=.2)
+names(global.pal) <- colnames(expression.vals)
+local.pal <- global.pal[as.character(unique(comm.highest.label))] #unique colorset used for this instance 
+comm.pal <- local.pal[as.character(comm.highest.label)] #colors used by each community
+plot(g08.weighted
+     ,mark.groups=communities.object, mark.expand = 2, edge.width=0.2 
+     ,edge.color="lightgrey"
+     ,mark.col=comm.pal
+     ,mark.border="black"
+     ,vertex.size=2
+     ,vertex.color=as.factor(V(g08.weighted) %in% border.nodes))
+legend("bottomright",inset=.02,title="Dominant cell type"
+       ,fill=local.pal
+       ,legend=names(local.pal) 
+       )
+```
+```{r}
+border.nodes
+```
+
+
+# Rerun for different base graph
+```{r, fig.width = 7, fig.height = 7}
+find_border_nodes <- function(basegraph){
+  comm <- cluster_infomap(basegraph)
+  
+  border.edges <- crossing(comm, basegraph)
+  border.crossings <- ends(basegraph, E(basegraph)[border.edges]) #647
+  #dim(border.crossings) #647 by 2
+  #border.crossings[1:5,]
+  
+  #for each community, make string with any cell types that make up more that 0.15 composition
+  comm.top.celltypes <- lapply(communities(comm),function(z){
+    x <- colMeans(expression.vals[z,])
+    x <- x[sort.list(x,decreasing = TRUE)]
+    if (length(which(x>.3))>0){
+      x[which(x>.3)]
+    } else if (length(which(x>.15))>0){
+      x[which(x>.15)]
+    } else {
+      x[1:2]
+    }
+  })
+  comm.highest.label <- as.factor(sapply(comm.top.celltypes, function(x){names(x)[1]})) #make list of highest cell type in each community
+  memb <- comm.highest.label[membership(comm)] #for all 1072 spots, list dominant cell type for that spots community
+  
+  edge.connects.different.dominant.celltypes <- memb[border.crossings[,1]] != memb[border.crossings[,2]]
+  #length(edge.connects.different.dominant.celltypes)
+  #sum(edge.connects.different.dominant.celltypes) #561 are true borders
+  true.crossings <- border.crossings[edge.connects.different.dominant.celltypes,]
+  unique(c(true.crossings[,1],true.crossings[,2]))
+  }
+
+test <- function(basegraph){
+  #basegraph <- g04.weighted
+  comm <- cluster_infomap(basegraph)
+  
+  border.edges <- crossing(comm, basegraph)
+  border.crossings <- ends(basegraph, E(basegraph)[border.edges]) #647
+  print (paste(c("number of edges in basegraph:", length(border.edges)))) #4019 (total number of edges)
+  print (paste(c("border edge sum:", sum(border.edges)))) #647 edges that connect different communities
+  #dim(border.crossings) #647 by 2
+  #border.crossings[1:5,]
+  
+  #for each community, make string with any cell types that make up more that 0.15 composition
+  comm.top.celltypes <- lapply(communities(comm),function(z){
+    x <- colMeans(expression.vals[z,])
+    x <- x[sort.list(x,decreasing = TRUE)]
+    if (length(which(x>.3))>0){
+      x[which(x>.3)]
+    } else if (length(which(x>.15))>0){
+      x[which(x>.15)]
+    } else {
+      x[1:2]
+    }
+  })
+  comm.highest.label <- as.factor(sapply(comm.top.celltypes, function(x){names(x)[1]})) #make list of highest cell type in each community
+  memb <- comm.highest.label[membership(comm)] #for all 1072 spots, list dominant cell type for that spots community
+  
+  edge.connects.different.dominant.celltypes <- memb[border.crossings[,1]] != memb[border.crossings[,2]]
+  #length(edge.connects.different.dominant.celltypes)
+  #sum(edge.connects.different.dominant.celltypes) #561 are true borders
+  true.crossings <- border.crossings[edge.connects.different.dominant.celltypes,]
+  border.nodes <- unique(c(true.crossings[,1],true.crossings[,2]))
+  #dim(true.crossings)
+  print (paste(c("sum true border nodes:", sum(V(basegraph) %in% border.nodes))))
+  
+  global.pal <- topo.colors(length(unique(colnames(expression.vals))),alpha=.2)
+  names(global.pal) <- colnames(expression.vals)
+  local.pal <- global.pal[as.character(unique(comm.highest.label))] #unique colorset used for this instance 
+  comm.pal <- local.pal[as.character(comm.highest.label)] #colors used by each community
+  plot(basegraph
+       ,mark.groups=comm, mark.expand = 2, edge.width=0.2 
+       ,edge.color="lightgrey"
+       ,mark.col=comm.pal
+       ,mark.border="black"
+       ,vertex.size=2
+       ,vertex.color=as.factor(V(basegraph) %in% border.nodes))
+}
+```
+
+```{r}
+test(g04.weighted)
+test(g08.weighted)
+```
+
+
+
+```{r}
+find_border_nodes(g04.weighted)
+find_border_nodes(g08.weighted)
+```
+
+```{r}
+saveRDS(find_border_nodes(g04.weighted), file="g4.border.nodes.rds")
+saveRDS(find_border_nodes(g08.weighted), file="g8.border.nodes.rds")
+saveRDS(expression.vals, file="expression.vals.rds")
+```
+
+
+# Enrichment analysis of border-region samples
+Need to use different workstation, because ClusterProfiler breaks dependencies used for Seurat.
+```{r}
+#library(clusterProfiler)
+```
+
+
+
 ### Later
 * Interactive Shiny app - use sliders to adjust number of nearest neighbor edges, and to "blob" together communities, * Use radio buttons to select which community detection algo to use.
 * Hover over community to see its name and a chart with aggregate cell type distribution of that community
 * Apply algorithm to slide-seq data, and another 10x dataset (need to find anchoring reference though)
 
+* plot relationship between modularity, neighbor degree, and community algorithm. 
 
 
 
