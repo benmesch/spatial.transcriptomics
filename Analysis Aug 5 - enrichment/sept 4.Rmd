@@ -1,0 +1,95 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r, echo=FALSE}
+library(org.Hs.eg.db)
+#library(clusterProfiler)
+library(AnnotationDbi)
+```
+
+Load expression values (transformed and normalized, limited to 16k genes from 31k originally.
+
+Cell types data (`expressoin.vals`) holds composition of 23 cell types for all 1,072 spots. Transformed counts data (`SCT`) has normalized gene counts of 16,017 genes for every spot.
+```{r}
+expression.vals <- readRDS('expression.vals.rds')
+gene.list <- readRDS('gene.list.rds')
+SCT <- readRDS('SCT.rds')
+
+n <- dim(expression.vals)[1]
+dim(expression.vals)
+dim(SCT)
+```
+```{r}
+g0 <- "94 99 161 268 291 358 407 423 510 532 538 539 751 767 793 818 842 1008 1069"
+g0 <- as.numeric(unlist(strsplit(g0," ")))
+g1 <- "57 313 335 408 665 673 804 689"
+g1 <- as.numeric(unlist(strsplit(g1," ")))
+g0
+```
+
+
+```{r}
+g0.means <- rowMeans(SCT[,g0])
+g1.means <- rowMeans(SCT[,g1])
+#create gene list
+gene.list.1.0 <- 10^g1.means / 10^g0.means #raw values are all log10 transormed. undo that.
+gene.list.1.0 <- log(gene.list.1.0, base=2)
+plot(sort(gene.list.1.0))
+abline(0,0)
+```
+Use bioconductor package to convert gene names into Entrez ids. Remove duplicate Entrez located for 3 of the genes:
+```{r}
+annot <- AnnotationDbi::select(org.Hs.eg.db, keys=toupper(gene.list), columns=c("SYMBOL","ENTREZID")
+                , keytype="SYMBOL", multiVals="first")
+which(table((annot[,1]))>1)
+length(unique(annot[,1]))
+sum(annot[,1] %in% c("MEMO1","MMD2","TEC")) #6 entrez ids for these 3 gene symbols
+#which(annot[,1] %in% c("MEMO1","MMD2","TEC"))
+annot[which(annot[,1] %in% c("MEMO1","MMD2","TEC")),]
+```
+Remove the duplicate rows, to stay at 16,017 gene rows.
+```{r}
+if (dim(annot)[1]>16017) {
+annot <- annot[-c(4848,5443,14992),]
+}
+head(annot)
+```
+
+
+## Save background gene list for later enrichment analysis
+```{r}
+as.character(annot[!is.na(annot['ENTREZID']),'ENTREZID'])[115950:16017]
+write.table(annot[!is.na(annot['ENTREZID']),'ENTREZID'],"background_genes.txt", sep=" ",row.names=FALSE,col.names=FALSE)
+```
+
+
+
+
+## Alternate plot of log-ratios for all 16k genes:
+```{r}
+hist((gene.list.1.0))
+```
+
+
+Save differentiall expressed genes. Limit to only genes that mapped to an Entrez ID & had log-ratio > fold.change.cutoff
+```{r}
+fold.change.cutoff <- 1.0
+```
+
+```{r}
+differential.genes <- annot[!is.na(annot[,2]) & abs(gene.list.1.0) > fold.change.cutoff,2]
+length(differential.genes)
+paste(differential.genes, collapse=' ')
+write.table(differential.genes, file="differential_entrez_logratio_abs_greater_point3.txt"
+            , row.names = FALSE, col.names = FALSE, quote = FALSE)
+```
+
+
+
+

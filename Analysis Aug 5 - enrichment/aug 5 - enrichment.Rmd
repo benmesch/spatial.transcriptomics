@@ -1,0 +1,243 @@
+---
+title: "R Notebook"
+output: md_document
+---
+
+For legacy 5330 project, compared group 1 to group 0 (cancer vs non cancer sample
+log2( 10^gene means / 10^other gene means )
+
+Then select only genes with absolute value > 2, and sort before passing into the cluster profiler function.
+```{r, echo=FALSE}
+library(org.Hs.eg.db)
+library(clusterProfiler)
+library(AnnotationDbi)
+```
+
+Load expression values (transformed and normalized, limited to 16k genes from 31k originally.
+```{r}
+expression.vals <- readRDS('expression.vals.rds')
+g4.border.nodes <- readRDS('g4.border.nodes.rds')
+g8.border.nodes <- readRDS('g8.border.nodes.rds')
+gene.list <- readRDS('gene.list.rds')
+SCT <- readRDS('SCT.rds')
+```
+
+Cell types data (`expressoin.vals`) holds composition of 23 cell types for all 1,072 spots. Transformed counts data (`SCT`) has normalized gene counts of 16,017 genes for every spot.
+```{r}
+n <- dim(expression.vals)[1]
+dim(expression.vals)
+dim(SCT)
+```
+
+Split the 1,072 samples into two groups "g0" and "g1". Log10 transform (this was done for 5330 project).
+```{r}
+print (c('border samples:', length(g4.border.nodes)))
+print (c('non border samples:', n-length(g4.border.nodes)))
+```
+
+Take gene means for each of the 2 different groups of spots, and plot the log-transformed ratio.
+```{r}
+g0.means <- rowMeans(SCT[,-g4.border.nodes])
+g1.means <- rowMeans(SCT[,g4.border.nodes])
+#create gene list
+gene.list.1.0 <- 10^g1.means / 10^g0.means #raw values are all log10 transormed. undo that.
+gene.list.1.0 <- log(gene.list.1.0, base=2)
+plot(sort(gene.list.1.0))
+abline(0,0)
+```
+
+Use bioconductor package to convert gene names into Entrez ids. Remove duplicate Entrez located for 3 of the genes:
+```{r}
+annot <- AnnotationDbi::select(org.Hs.eg.db, keys=toupper(gene.list), columns=c("SYMBOL","ENTREZID")
+                , keytype="SYMBOL", multiVals="first")
+which(table((annot[,1]))>1)
+length(unique(annot[,1]))
+sum(annot[,1] %in% c("MEMO1","MMD2","TEC")) #6 entrez ids for these 3 gene symbols
+#which(annot[,1] %in% c("MEMO1","MMD2","TEC"))
+annot[which(annot[,1] %in% c("MEMO1","MMD2","TEC")),]
+```
+Remove the duplicate rows, to stay at 16,017 gene rows.
+```{r}
+annot <- annot[-c(4848,5443,14992),]
+head(annot)
+```
+
+Alternate plot of log-ratios for all 16k genes:
+```{r}
+hist((gene.list.1.0))
+```
+Save differentiall expressed genes. Limit to only genes that mapped to an Entrez ID & had log-ratio > 0.3
+```{r}
+differential.genes <- annot[!is.na(annot[,2]) & abs(gene.list.1.0) > 0.3,2]
+differential.genes
+write.table(differential.genes, file="differential_entrez_logratio_abs_greater_point3.txt"
+            , row.names = FALSE, col.names = FALSE, quote = FALSE)
+```
+
+save separate lists of differentially up and down expressed genes:
+```{r}
+differential.genes <- annot[!is.na(annot[,2]) & gene.list.1.0 > 0.3,2]
+length(differential.genes)
+write.table(differential.genes, file="differential_entrez_logratio_greater_point3.txt"
+            , row.names = FALSE, col.names = FALSE, quote = FALSE)
+
+differential.genes <- annot[!is.na(annot[,2]) & gene.list.1.0 < -0.3,2]
+length(differential.genes)
+write.table(differential.genes, file="differential_entrez_logratio_less_point3.txt"
+            , row.names = FALSE, col.names = FALSE, quote = FALSE)
+```
+### Differential genes (n=64)
+```{r}
+ggo <- groupGO(gene     = differential.genes,
+               OrgDb    = org.Hs.eg.db,
+               ont      = "MF",
+               level    = 2,
+               readable = TRUE)
+ggo@result = ggo@result[order(ggo@result[,"Count"],decreasing=TRUE),]
+ggo@result
+
+barplot(ggo,showCategory=8)
+```
+
+### Up expressed genes
+```{r}
+differential.genes <- annot[!is.na(annot[,2]) & gene.list.1.0 > 0.3,2]
+ggo <- groupGO(gene     = differential.genes,
+               OrgDb    = org.Hs.eg.db,
+               ont      = "MF",
+               level    = 2,
+               readable = TRUE)
+ggo@result = ggo@result[order(ggo@result[,"Count"],decreasing=TRUE),]
+ggo@result
+```
+
+
+### Down expressed genes
+```{r}
+differential.genes <- annot[!is.na(annot[,2]) & gene.list.1.0 < -0.3,2]
+ggo <- groupGO(gene     = differential.genes,
+               OrgDb    = org.Hs.eg.db,
+               ont      = "MF",
+               level    = 3,
+               readable = TRUE)
+ggo@result = ggo@result[order(ggo@result[,"Count"],decreasing=TRUE),]
+ggo@result
+```
+
+
+
+```{r}
+differential.genes <- annot[!is.na(annot[,2]) & gene.list.1.0 > 0.3,2]
+ggo <- groupGO(gene     = differential.genes,
+               OrgDb    = org.Hs.eg.db,
+               ont      = "MF",
+               level    = 3,
+               readable = TRUE)
+ggo@result = ggo@result[order(ggo@result[,"Count"],decreasing=TRUE),]
+ggo@result
+```
+
+
+```{r}
+differential.genes
+```
+
+
+```{r}
+length(gene.list.1.0)
+length(gene.list)
+annot['ENTREZID']
+test <- gene.list.1.0
+test[1:5]
+names(test)[1:5]
+typeof(unlist(annot['ENTREZID']))
+names(test) <- unlist(annot['ENTREZID'])
+test <- sort(test, decreasing=TRUE)
+test[1:5]
+```
+
+
+
+# Older Spring 2019 code below.
+```{r}
+gene <- names(test)[abs(test) > 2]
+ggo <- groupGO(gene     = gene,
+               OrgDb    = org.Hs.eg.db,
+               ont      = "MF",
+               level    = 2,
+               readable = TRUE)
+#order by count
+ggo@result = ggo@result[order(ggo@result[,"Count"],decreasing=TRUE),]
+ggo@result
+```
+
+```{r}
+barplot(ggo,showCategory=8)
+```
+
+
+
+Further information about enirchment scores:
+https://yulab-smu.github.io/clusterProfiler-book/chapter2.html#gene-set-enrichment-analysis
+
+```{r}
+#KEGG Gene Set Enrichment Analysis
+kk2 <- gseKEGG(geneList     = test,
+               organism     = 'hsa',
+               nPerm        = 1000,
+               minGSSize    = 100,
+               pvalueCutoff = 0.05,
+               verbose      = FALSE)
+kk2@result = kk2@result[order(kk2@result[,"setSize"],decreasing=TRUE),]
+kk2@result
+```
+
+```{r}
+#KEGG over representation Analysis
+kk3 <- enrichKEGG(gene    = names(test),
+               organism     = 'hsa',
+               pvalueCutoff = 0.05
+  )
+kk3@result[,c("Description","GeneRatio","p.adjust","Count")]
+```
+
+
+```{r}
+#plot(kk2@result[,"setSize"])
+```
+
+
+
+```{r}
+#library(GSEABase)
+#library(tidyr)
+```
+
+```{r}
+#gene <- names(test)[abs(test) > 2]
+#wpgmtfile <- system.file("extdata", "wikipathways-20180810-gmt-Homo_sapiens.gmt", package="clusterProfiler")
+#wp2gene <- read.gmt(wpgmtfile) #i had to install GSEAbase first ??
+#wp2gene <- wp2gene %>% tidyr::separate(ont, c("name","version","wpid","org"), "%")
+#wpid2gene <- wp2gene %>% dplyr::select(wpid, gene) #TERM2GENE
+#wpid2name <- wp2gene %>% dplyr::select(wpid, name) #TERM2NAME
+#ewp <- enricher(gene, TERM2GENE = wpid2gene, TERM2NAME = wpid2name)
+#ewp <- setReadable(ewp, org.Hs.eg.db, keyType = "ENTREZID")
+#ewp@result = ewp@result[order(ewp@result[,"Count"],decreasing=TRUE),]
+#ewp@result
+```
+
+```{r}
+#barplot(ewp,showCategory=12)
+```
+
+
+```{r}
+#ewp2 <- GSEA(test, TERM2GENE = wpid2gene, TERM2NAME = wpid2name, verbose=FALSE)
+#ewp2 <- setReadable(ewp2, org.Hs.eg.db, keyType = "ENTREZID")
+#ewp2@result = ewp2@result[order(ewp2@result[,"setSize"],decreasing=TRUE),]
+#ewp2@result
+```
+
+```{r}
+#gset@featureData@data[which(gset@featureData@data[,"Gene.ID"]==100128545),c("ID","Gene.ID")]
+```

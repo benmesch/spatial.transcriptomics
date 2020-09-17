@@ -1,0 +1,97 @@
+---
+title: "Try DESEQ2"
+output: html_notebook
+---
+
+
+
+```{r, echo=FALSE}
+library(org.Hs.eg.db)
+#library(clusterProfiler)
+library(AnnotationDbi)
+```
+
+Load expression values (transformed and normalized, limited to 16k genes from 31k originally.
+
+Cell types data (`expressoin.vals`) holds composition of 23 cell types for all 1,072 spots. Transformed counts data (`SCT`) has normalized gene counts of 16,017 genes for every spot.
+```{r}
+expression.vals <- readRDS('expression.vals.rds')
+gene.list <- readRDS('gene.list.rds')
+SCT <- readRDS('SCT.rds')
+Spatial <- readRDS('cortex_Spatial.rds')
+
+n <- dim(expression.vals)[1]
+dim(expression.vals)
+dim(SCT)
+```
+
+
+
+```{r}
+g0 <- "64 68 176 191 248 264 286 305 334 340 344 420 445 494 570 675 710 760 774 780 790 849 929 956 964 971 987 1004 1009 1065"
+g0 <- as.numeric(unlist(strsplit(g0," ")))
+#"cases" or "treated", go here:
+g1 <- "12 33 35 38 54 121 146 189 304 306 352 395 409 484 492 574 609 707 726 828 1011 490 462 406 1031 1037"
+g1 <- as.numeric(unlist(strsplit(g1," ")))
+g0
+```
+### Need to be using raw counts, instead of transformed SCT counts!
+```{r}
+cts <- Spatial[,c(g0,g1)]
+dim(cts)
+head(cts[,1:10])
+coldata <- as.matrix(as.factor(c(rep('untreated',length(g0)),rep('treated',length(g1)))))
+rownames(coldata) <- colnames(cts)
+colnames(coldata) <- 'condition'
+coldata
+#coldata
+```
+
+
+```{r}
+library("DESeq2")
+```
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = cts,
+                              colData = coldata,
+                              design = ~ condition)
+dds$condition <- relevel(dds$condition, ref = "untreated")
+dds
+```
+
+Can add Entrez IDs into mcol(dds), as additional metadata
+
+
+
+
+Prefiltering:
+```{r}
+keep <- rowSums(counts(dds)) >= 10
+dds <- dds[keep,]
+```
+
+Differential Expression Analysis
+```{r}
+dds <- DESeq(dds)
+res <- results(dds)
+res
+```
+
+```{r}
+plot(-log(sort(res$padj)))
+abline(-log(.05),0)
+```
+
+
+```{r}
+rownames(res)[which(res$padj<.05)]
+```
+
+```{r}
+plotCounts(dds, gene=which.min(res$padj), intgroup="condition")
+```
+
+
+
+
